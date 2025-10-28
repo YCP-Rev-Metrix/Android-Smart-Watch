@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault">
+        <!-- Disable the system-level swipe-to-dismiss gesture -->
+        <item name="android:windowSwipeToDismiss">false</item>
+    </style>
+
+    <!-- (Optional) You can also extend your Flutter launch theme -->
+    <style name="LaunchTheme" parent="AppTheme">
+        <!-- Keep background black or match your watch -->
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>
