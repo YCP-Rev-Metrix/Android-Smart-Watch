@@ -85,6 +85,177 @@ class _FrameShellState extends State<FrameShell> {
     );
   }
 }
+class FrameScreen extends StatefulWidget {
+  const FrameScreen({Key? key}) : super(key: key);
+
+  @override
+  State<FrameScreen> createState() => _FrameScreenState();
+}
+
+class _FrameScreenState extends State<FrameScreen> {
+  int currentFrame = 1;
+  int lane = 1;
+  int board = 18;
+  double speed = 15;
+  int ball = 1;
+  List<bool> pins = List.filled(10, false);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[850],
+      body: Center(
+        child: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => BowlingShot(
+                  color: Colors.grey.shade800, // Provide an appropriate color
+                  frameIndex: currentFrame - 1, // Adjust frameIndex based on currentFrame
+                  shotIndex: 1, // Set the shotIndex as needed
+                ),
+              ),
+            );
+          },
+          child: Container(
+            width: 280,
+            height: 280,
+            decoration: BoxDecoration(
+              color: Color.fromRGBO(67,67,67,1),
+              shape: BoxShape.circle,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                const SizedBox(height: 24),
+                Text(
+                  'Frame $currentFrame',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildPinDisplay(pins),
+                const SizedBox(height: 6),
+                Transform.scale(
+                  scale: 0.8,
+                  child: _buildInfoBar(lane, board, speed, ball),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPinDisplay(List<bool> pins) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [7, 8, 9, 10].map((pin) => _buildPin(pin, pins)).toList(),
+        ),
+        const SizedBox(height: 3),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [4, 5, 6].map((pin) => _buildPin(pin, pins)).toList(),
+        ),
+        const SizedBox(height: 3),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [2, 3].map((pin) => _buildPin(pin, pins)).toList(),
+        ),
+        const SizedBox(height: 3),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [_buildPin(1, pins)],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPin(int pinNumber, List<bool> pins) {
+    int index = pinNumber == 10 ? 0 : pinNumber;
+    bool isDown = pins[index];
+    
+    return Container(
+      width: 18,
+      height: 18,
+      margin: const EdgeInsets.symmetric(horizontal:5, vertical: 1),
+      decoration: BoxDecoration(
+        color: isDown ? const Color.fromRGBO(153,153,153,1) : const Color.fromRGBO(142, 124, 195, 1),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.black,
+          width: 0.5,
+        ),  
+      ),
+    );
+  }
+
+  Widget _buildDivider(){
+    return Container(
+    width: 1,
+    height: 24,
+    color: Colors.black.withOpacity(0.4), // subtle line color
+    margin: const EdgeInsets.symmetric(horizontal: 3),
+  );
+  }
+  Widget _buildInfoBar(int lane, int board, double speed, int ball) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color.fromRGBO(153, 153, 153, 1),
+        border: Border.all(
+          color: Colors.black,
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildInfoCell('Lane', lane.toString()),
+          _buildDivider(),
+          _buildInfoCell('Board', board.toString()),
+          _buildDivider(),
+          _buildInfoCell('Speed', speed.toDouble().toStringAsFixed(1)),
+          _buildDivider(),
+          _buildInfoCell('Ball', ball.toString()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCell(String label, String value) {
+    return Container(
+      width: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 10,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.black,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class BowlingFrame extends StatefulWidget {
   final Color color;
