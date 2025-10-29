@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
+  
   if (ui.PlatformDispatcher.instance.implicitView == null) {
     debugPrint('Running in emulator: forcing software rendering');
   }
@@ -17,8 +17,16 @@ class BowlingWatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        scaffoldBackgroundColor: Color.fromRGBO(67, 67, 67, 1),
+        canvasColor: Color.fromRGBO(67, 67, 67, 1),
+        colorScheme: const ColorScheme.dark(
+          background: Color.fromRGBO(67, 67, 67, 1),
+          surface: Color.fromRGBO(67, 67, 67, 1),
+        ),
+      ),
       home: FrameShell(),
     );
   }
@@ -267,6 +275,7 @@ class _BowlingShotState extends State<BowlingShot> {
 Widget build(BuildContext context) {
   return Scaffold(
     backgroundColor: Color.fromRGBO(67, 67, 67, 1),
+    extendBodyBehindAppBar: true,
     body: Center(
       child: GestureDetector(
         onTap: () async {
@@ -275,7 +284,7 @@ Widget build(BuildContext context) {
             MaterialPageRoute(
               builder: (_) => ShotPage(
                 initialPins: List.from(pins),
-                frameNumber: widget.frameIndex + 1,
+                shotNumber: widget.shotIndex,
               ),
             ),
           );
@@ -440,9 +449,9 @@ Widget _buildDivider() {
 // -------------------- ShotPage --------------------
 class ShotPage extends StatefulWidget {
   final List<bool> initialPins;
-  final int frameNumber;
+  final int shotNumber;
 
-  const ShotPage({super.key, required this.initialPins, required this.frameNumber});
+  const ShotPage({super.key, required this.initialPins, required this.shotNumber});
 
   @override
   State<ShotPage> createState() => _ShotPageState();
@@ -470,159 +479,175 @@ class _ShotPageState extends State<ShotPage> {
     });
   }
 
-  @override
+@override
 Widget build(BuildContext context) {
   return Scaffold(
     backgroundColor: Color.fromRGBO(67, 67, 67, 1),
-    body: Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 10),
-          Text(
-            'Frame ${widget.frameNumber}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
+    extendBodyBehindAppBar: true,
+    body: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              'Shot ${widget.shotNumber}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
+            const SizedBox(height: 6),
+            _buildPinDisplay(),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildOutcomeBox("X"),
+                
+                _buildOutcomeBox("/"),
+                
+                _buildOutcomeBox("F"),
+                
+                _buildSubmitButton(context),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
-          // Pins (no circular container)
-          _buildPinDisplay(),
-          const SizedBox(height: 10),
+  Widget _buildPinDisplay() {
+  List<List<int>> pinRows = [
+    [7, 8, 9, 10],
+    [4, 5, 6],
+    [2, 3],
+    [1],
+  ];
 
-          // Outcome buttons
-          _buildOutcomeButtons(),
-          const SizedBox(height: 10),
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    children: pinRows.map((row) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 1), 
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: row.map((pin) => _buildPin(pin)).toList(),
+        ),
+      );
+    }).toList(),
+  );
+}
 
-          // Submit
-          _buildSubmitButton(context),
-        ],
+Widget _buildPin(int pinNumber) {
+  int index = pinNumber - 1;
+  bool isDown = pins[index];
+
+  return GestureDetector(
+    onTap: () => _togglePin(index),
+    child: Container(
+      width: 31, 
+      height: 31,
+      margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 0.5), 
+      decoration: BoxDecoration(
+        color: isDown
+            ? const Color.fromRGBO(153, 153, 153, 1)
+            : const Color.fromRGBO(142, 124, 195, 1),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.black, width: 0.7),
       ),
     ),
   );
 }
 
 
-  // ---------------- Pin Display ----------------
-  Widget _buildPinDisplay() {
-    List<List<int>> pinRows = [
-      [7, 8, 9, 10],
-      [4, 5, 6],
-      [2, 3],
-      [1],
-    ];
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: pinRows.map((row) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: row.map((pin) => _buildPin(pin)).toList(),
-          ),
-        );
-      }).toList(),
-    );
-  }
 
-  Widget _buildPin(int pinNumber) {
-    int index = pinNumber - 1;
-    bool isDown = pins[index];
-    return GestureDetector(
-      onTap: () => _togglePin(index),
-      child: Container(
-        width: 18,
-        height: 18,
-        margin: const EdgeInsets.symmetric(horizontal: 5),
-        decoration: BoxDecoration(
-          color: isDown
-              ? const Color.fromRGBO(153, 153, 153, 1)
-              : const Color.fromRGBO(142, 124, 195, 1),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.black, width: 0.5),
-        ),
-      ),
-    );
-  }
+  Widget _buildOutcomeBox(String symbol) {
+  final bool isSelected = selectedOutcome == symbol;
 
-  // ---------------- Outcome Buttons ----------------
-  Widget _buildOutcomeButtons() {
-    return Column(
-      children: [
-        _buildOutcomeBox("Strike"),
-        const SizedBox(height: 6),
-        _buildOutcomeBox("Spare"),
-        const SizedBox(height: 6),
-        _buildOutcomeBox("Foul"),
-      ],
-    );
-  }
+  return GestureDetector(
+    onTap: () {
+      _selectOutcome(symbol);
 
-  Widget _buildOutcomeBox(String label) {
-    final bool isSelected = selectedOutcome == label;
-
-    return GestureDetector(
-      onTap: () => _selectOutcome(label),
-      child: Container(
-        width: 100,
-        height: 20,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color.fromRGBO(142, 124, 195, 1)
-              : const Color.fromRGBO(153, 153, 153, 1),
-          border: Border.all(color: Colors.black, width: 0.6),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.black,
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ---------------- Submit Button ----------------
-  Widget _buildSubmitButton(BuildContext context) {
-    return Container(
-      width: 80,
-      height: 15,
+      setState(() {
+        if (symbol == "X") {
+          // Strike — all pins down
+          pins = List.filled(10, true);
+        } else if (symbol == "/") {
+          // Spare — knock down all remaining standing pins
+          for (int i = 0; i < pins.length; i++) {
+            pins[i] = true;
+          }
+        } else if (symbol == "F") {
+          // Foul — no pins hit
+          pins = List.filled(10, false);
+        }
+      });
+      Navigator.pop(context, {
+        'pins': pins,
+        'outcome': symbol,
+      });
+    },
+    child: Container(
+      width: 28,
+      height: 25,
       decoration: BoxDecoration(
-        color: const Color.fromRGBO(153, 153, 153, 1),
-        border: Border.all(color: Colors.black, width: 0.5),
+        color: isSelected
+            ? const Color.fromRGBO(142, 124, 195, 1)
+            : const Color.fromRGBO(153, 153, 153, 1),
+        border: Border.all(color: Colors.black, width: 0.6),
       ),
-      child: TextButton(
-        onPressed: () {
-          Navigator.pop(context, {
-            'pins': pins,
-            'outcome': selectedOutcome,
-          });
-        },
-        style: TextButton.styleFrom(
-          padding: EdgeInsets.zero,
-          foregroundColor: Colors.black,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.zero,
-          ),
-        ),
-        child: const Text(
-          'Submit',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.normal,
-            color: Colors.black,
-          ),
+      alignment: Alignment.center,
+      child: Text(
+        symbol,
+        style: TextStyle(
+          color: isSelected ? Colors.white : Colors.black,
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
+  Widget _buildSubmitButton(BuildContext context) {
+  return Container(
+    width: 44,
+    height: 25,
+    decoration: BoxDecoration(
+      color: const Color.fromRGBO(153, 153, 153, 1),
+      border: Border.all(color: Colors.black, width: 0.6),
+    ),
+    child: TextButton(
+      onPressed: () {
+        Navigator.pop(context, {
+          'pins': pins,
+          'outcome': selectedOutcome,
+        });
+      },
+      style: TextButton.styleFrom(
+        padding: EdgeInsets.zero,
+        foregroundColor: Colors.black,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero,
+        ),
+      ),
+      child: const Text(
+        'Submit',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: Colors.black,
+        ),
+      ),
+    ),
+  );
+}
 }
 
 
@@ -664,6 +689,7 @@ class _OtherPageState extends State<OtherPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Color.fromRGBO(67, 67, 67, 1),
+      extendBodyBehindAppBar: true,
       body: SafeArea(
         child: Center(
           
@@ -695,7 +721,7 @@ class _OtherPageState extends State<OtherPage> {
               _buildHorizontalPicker(
                 label: 'Speed',
                 currentValue: (speed * 10).round(),
-                values: List.generate(351, (i) => (i + 50)), // 5.0 → 40.0 (×10)
+                values: List.generate(351, (i) => (i + 50)), 
                 onChanged: (v) => setState(() => speed = v / 10.0),
               ),
               const SizedBox(height: 2),
@@ -715,7 +741,7 @@ class _OtherPageState extends State<OtherPage> {
                     padding: EdgeInsets.zero,
                     foregroundColor: Colors.black,
                     shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero, // square corners
+                      borderRadius: BorderRadius.zero, 
                     ),
                   ),
                   child: const Text(
@@ -784,9 +810,9 @@ class _OtherPageState extends State<OtherPage> {
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                   colors: [
-                    Color(0xFF3A3A3A), // darkest edges
+                    Color(0xFF3A3A3A), 
                     Color(0xFF5B5B5B),
-                    Color(0xFFDADADA), // bright center highlight
+                    Color(0xFFDADADA), 
                     Color(0xFF5B5B5B),
                     Color(0xFF3A3A3A),
                   ],
