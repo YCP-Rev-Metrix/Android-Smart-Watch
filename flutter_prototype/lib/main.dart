@@ -262,70 +262,51 @@ class _BowlingShotState extends State<BowlingShot> {
   double speed = 15.0;
   int ball = 1;
 
-  @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final circleSize = size.width * 0.65; // matches FrameScreen style
-    final infoBarHeight = 42.0; // scaled for small watch
 
-    return Scaffold(
-      backgroundColor: Colors.grey[850],
-      body: SafeArea(
-        child: Center(
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Color.fromRGBO(67, 67, 67, 1),
+    body: Center(
+      child: GestureDetector(
+        onTap: () async {
+          final result = await Navigator.push<Map<String, dynamic>>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ShotPage(
+                initialPins: List.from(pins),
+                frameNumber: widget.frameIndex + 1,
+              ),
+            ),
+          );
+          if (result != null) {
+            setState(() => pins = result['pins'] as List<bool>);
+          }
+        },
+        child: Container(
+          width: 280,
+          height: 280,
+          decoration: const BoxDecoration(
+            color: Color.fromRGBO(67, 67, 67, 1),
+            shape: BoxShape.circle,
+          ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.start,
             children: [
+              const SizedBox(height: 24),
               Text(
                 'Frame ${widget.frameIndex + 1} — Shot ${widget.shotIndex}',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 12),
+              _buildPinDisplay(pins),
+              const SizedBox(height: 6),
 
-              // Top pins area (tappable)
-              GestureDetector(
-                onTap: () async {
-                  final updatedPins = await Navigator.push<List<bool>>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PinsPage(initialPins: List.from(pins)),
-                    ),
-                  );
-                  if (updatedPins != null) {
-                    setState(() => pins = updatedPins);
-                  }
-                },
-                child: Container(
-                  width: circleSize,
-                  height: circleSize,
-                  decoration: const BoxDecoration(
-                    color: Color.fromRGBO(67, 67, 67, 1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 12),
-                      Text(
-                        'Frame ${widget.frameIndex + 1}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildPinDisplay(pins),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Info bar (tappable)
+              // 👇 Info Bar (Data Section)
               GestureDetector(
                 onTap: () async {
                   final updatedInfo = await Navigator.push<Map<String, dynamic>>(
@@ -344,18 +325,21 @@ class _BowlingShotState extends State<BowlingShot> {
                       lane = updatedInfo['lane'] as int;
                       board = updatedInfo['board'] as int;
                       speed = updatedInfo['speed'] as double;
-                      ball = updatedInfo['ball'] as int;
                     });
                   }
                 },
-                child: _buildInfoBar(lane, board, speed, ball, height: infoBarHeight),
+                child: Transform.scale(
+                  scale: 0.8,
+                  child: _buildInfoBar(lane, board, speed, 1),
+                ),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildPinDisplay(List<bool> pins) {
     return Column(
@@ -399,26 +383,39 @@ class _BowlingShotState extends State<BowlingShot> {
     );
   }
 
-  Widget _buildInfoBar(int lane, int board, double speed, int ball, {double height = 40}) {
-    return Container(
-      height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: const Color.fromRGBO(153, 153, 153, 1),
-        border: Border.all(color: Colors.black, width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildInfoCell('Lane', lane.toString()),
-          _buildInfoCell('Board', board.toString()),
-          _buildInfoCell('Speed', speed.toStringAsFixed(1)),
-          _buildInfoCell('Ball', '1'),
-        ],
-      ),
-    );
-  }
+  Widget _buildInfoBar(int lane, int board, double speed, int ball, {double height = 50}) {
+  return Container(
+    height: height,
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: const Color.fromRGBO(153, 153, 153, 1),
+      border: Border.all(color: Colors.black, width: 0.5),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _buildInfoCell('Lane', lane.toString()),
+        _buildDivider(),
+        _buildInfoCell('Board', board.toString()),
+        _buildDivider(),
+        _buildInfoCell('Speed', speed.toStringAsFixed(1)),
+        _buildDivider(),
+        _buildInfoCell('Ball', '1'),
+      ],
+    ),
+  );
+}
+
+Widget _buildDivider() {
+  return Container(
+    width: 1,
+    height: 24,
+    color: Colors.black.withOpacity(0.4),
+    margin: const EdgeInsets.symmetric(horizontal: 3),
+  );
+}
+
 
   Widget _buildInfoCell(String label, String value) {
     return Container(
@@ -440,17 +437,20 @@ class _BowlingShotState extends State<BowlingShot> {
   }
 }
 
-// -------------------- PinsPage --------------------
-class PinsPage extends StatefulWidget {
+// -------------------- ShotPage --------------------
+class ShotPage extends StatefulWidget {
   final List<bool> initialPins;
-  const PinsPage({super.key, required this.initialPins});
+  final int frameNumber;
+
+  const ShotPage({super.key, required this.initialPins, required this.frameNumber});
 
   @override
-  State<PinsPage> createState() => _PinsPageState();
+  State<ShotPage> createState() => _ShotPageState();
 }
 
-class _PinsPageState extends State<PinsPage> {
+class _ShotPageState extends State<ShotPage> {
   late List<bool> pins;
+  String? selectedOutcome;
 
   @override
   void initState() {
@@ -458,71 +458,173 @@ class _PinsPageState extends State<PinsPage> {
     pins = List.from(widget.initialPins);
   }
 
+  void _togglePin(int index) {
+    setState(() {
+      pins[index] = !pins[index];
+    });
+  }
+
+  void _selectOutcome(String outcome) {
+    setState(() {
+      selectedOutcome = selectedOutcome == outcome ? null : outcome;
+    });
+  }
+
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade100,
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Text('Pins',
-                style: TextStyle(color: Colors.grey.shade800, fontSize: 20, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 16),
-            _buildPinGridSelectable(),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, pins),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey.shade800,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text('Submit'),
-            )
-          ],
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Color.fromRGBO(67, 67, 67, 1),
+    body: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 10),
+          Text(
+            'Frame ${widget.frameNumber}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Pins (no circular container)
+          _buildPinDisplay(),
+          const SizedBox(height: 10),
+
+          // Outcome buttons
+          _buildOutcomeButtons(),
+          const SizedBox(height: 10),
+
+          // Submit
+          _buildSubmitButton(context),
+        ],
+      ),
+    ),
+  );
+}
+
+
+  // ---------------- Pin Display ----------------
+  Widget _buildPinDisplay() {
+    List<List<int>> pinRows = [
+      [7, 8, 9, 10],
+      [4, 5, 6],
+      [2, 3],
+      [1],
+    ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: pinRows.map((row) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: row.map((pin) => _buildPin(pin)).toList(),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildPin(int pinNumber) {
+    int index = pinNumber - 1;
+    bool isDown = pins[index];
+    return GestureDetector(
+      onTap: () => _togglePin(index),
+      child: Container(
+        width: 18,
+        height: 18,
+        margin: const EdgeInsets.symmetric(horizontal: 5),
+        decoration: BoxDecoration(
+          color: isDown
+              ? const Color.fromRGBO(153, 153, 153, 1)
+              : const Color.fromRGBO(142, 124, 195, 1),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.black, width: 0.5),
         ),
       ),
     );
   }
 
-  Widget _buildPinGridSelectable() {
+  // ---------------- Outcome Buttons ----------------
+  Widget _buildOutcomeButtons() {
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [7, 8, 9, 10].map((p) => _buildSelectablePin(p)).toList()),
+        _buildOutcomeBox("Strike"),
         const SizedBox(height: 6),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [4, 5, 6].map((p) => _buildSelectablePin(p)).toList()),
+        _buildOutcomeBox("Spare"),
         const SizedBox(height: 6),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [2, 3].map((p) => _buildSelectablePin(p)).toList()),
-        const SizedBox(height: 6),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [_buildSelectablePin(1)]),
+        _buildOutcomeBox("Foul"),
       ],
     );
   }
 
-  Widget _buildSelectablePin(int pinNumber) {
-    final index = pinNumber - 1;
-    final isDown = pins[index];
+  Widget _buildOutcomeBox(String label) {
+    final bool isSelected = selectedOutcome == label;
 
     return GestureDetector(
-      onTap: () => setState(() => pins[index] = !pins[index]),
+      onTap: () => _selectOutcome(label),
       child: Container(
-        width: 36,
-        height: 36,
-        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        width: 100,
+        height: 20,
         decoration: BoxDecoration(
-          color: isDown ? const Color.fromRGBO(153, 153, 153, 1) : const Color.fromRGBO(142, 124, 195, 1),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.black, width: 0.5),
+          color: isSelected
+              ? const Color.fromRGBO(142, 124, 195, 1)
+              : const Color.fromRGBO(153, 153, 153, 1),
+          border: Border.all(color: Colors.black, width: 0.6),
         ),
         alignment: Alignment.center,
-        child: Text('$pinNumber', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black,
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------- Submit Button ----------------
+  Widget _buildSubmitButton(BuildContext context) {
+    return Container(
+      width: 80,
+      height: 15,
+      decoration: BoxDecoration(
+        color: const Color.fromRGBO(153, 153, 153, 1),
+        border: Border.all(color: Colors.black, width: 0.5),
+      ),
+      child: TextButton(
+        onPressed: () {
+          Navigator.pop(context, {
+            'pins': pins,
+            'outcome': selectedOutcome,
+          });
+        },
+        style: TextButton.styleFrom(
+          padding: EdgeInsets.zero,
+          foregroundColor: Colors.black,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+          ),
+        ),
+        child: const Text(
+          'Submit',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.normal,
+            color: Colors.black,
+          ),
+        ),
       ),
     );
   }
 }
+
 
 // -------------------- OtherPage --------------------
 class OtherPage extends StatefulWidget {
@@ -561,7 +663,7 @@ class _OtherPageState extends State<OtherPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C2C2C),
+      backgroundColor: Color.fromRGBO(67, 67, 67, 1),
       body: SafeArea(
         child: Center(
           
@@ -678,16 +780,15 @@ class _OtherPageState extends State<OtherPage> {
               height: 20,
               width: 260,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(6),
                 gradient: const LinearGradient(
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                   colors: [
-                    Color(0xFF1C1C1C), // darkest edges
+                    Color(0xFF3A3A3A), // darkest edges
                     Color(0xFF5B5B5B),
                     Color(0xFFDADADA), // bright center highlight
                     Color(0xFF5B5B5B),
-                    Color(0xFF1C1C1C),
+                    Color(0xFF3A3A3A),
                   ],
                   stops: [0.0, 0.2, 0.5, 0.8, 1.0],
                 ),
@@ -769,7 +870,7 @@ class MenuPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade900,
+      backgroundColor: Color.fromRGBO(67, 67, 67, 1),
       body: Center(
         child: ElevatedButton(
           onPressed: () => Navigator.pop(context),
