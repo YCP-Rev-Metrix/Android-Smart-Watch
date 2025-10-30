@@ -1,30 +1,33 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:watch_app/main.dart';
+import 'package:watch_app/pages/shot_page.dart';
+import 'package:watch_app/pages/other_page.dart';
+import 'package:watch_app/pages/home_page.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const BowlingWatch());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('ShotPage loads correctly', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: ShotPage(
+        initialPins: [false, false, false, false, false, false, false, false, false, false],
+        shotNumber: 1,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Shot'), findsOneWidget);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  testWidgets('OtherPage loads correctly', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: OtherPage(lane: 1, board: 10, speed: 15.0, shotNumber: 1),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Lane'), findsOneWidget);
+    expect(find.text('Submit'), findsOneWidget);
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('HomePage loads and returns safely', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: HomePage()));
+    expect(find.byType(HomePage), findsOneWidget);
   });
 }
