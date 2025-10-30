@@ -3,6 +3,8 @@ import 'package:watch_app/pages/game_page.dart';
 import 'shot_page.dart';
 import 'other_page.dart';
 import 'package:flutter/services.dart';
+import '../controllers/session_manager.dart';
+final session = SessionManager();
 
 class FrameShell extends StatefulWidget {
   const FrameShell({super.key});
@@ -199,14 +201,33 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
                         ],
                       ),
                       alignment: Alignment.center,
-                      child: Text(
-                        'Frame ${i + 1}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      child: Builder(builder: (context) {
+                        final session = SessionManager();
+                        final score = session.getFrameScore(i);
+
+                        return Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Frame ${i + 1}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Score: $score',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        );
+                      }),
+
                     ),
                   ),
                 ),
@@ -236,11 +257,22 @@ class BowlingShot extends StatefulWidget {
 }
 
 class _BowlingShotState extends State<BowlingShot> {
-  List<bool> pins = List.filled(10, false);
-  int lane = 1;
-  int board = 18;
-  double speed = 15.0;
-  int ball = 1;
+final session = SessionManager();
+
+late List<bool> pins;
+late int lane;
+late int board;
+late double speed;
+
+@override
+void initState() {
+  super.initState();
+  final shotData = session.getShot(widget.frameIndex, widget.shotIndex);
+  pins = List<bool>.from(shotData['pins']);
+  lane = shotData['lane'];
+  board = shotData['board'];
+  speed = shotData['speed'];
+}
 
 
 @override
@@ -260,8 +292,17 @@ Widget build(BuildContext context) {
               ),
             ),
           );
+
           if (result != null) {
-            setState(() => pins = result['pins'] as List<bool>);
+            setState(() {
+              pins = result['pins'] as List<bool>;
+            });
+            session.updateShot(widget.frameIndex, widget.shotIndex, {
+              'pins': pins,
+              'lane': lane,
+              'board': board,
+              'speed': speed,
+            });
           }
         },
         child: Container(
@@ -290,25 +331,33 @@ Widget build(BuildContext context) {
               // 👇 Info Bar (Data Section)
               GestureDetector(
                 onTap: () async {
-                  final updatedInfo = await Navigator.push<Map<String, dynamic>>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => OtherPage(
-                        lane: lane,
-                        board: board,
-                        speed: speed,
-                        shotNumber: widget.shotIndex,
-                      ),
+                final updatedInfo = await Navigator.push<Map<String, dynamic>>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => OtherPage(
+                      lane: lane,
+                      board: board,
+                      speed: speed,
+                      shotNumber: widget.shotIndex,
                     ),
-                  );
-                  if (updatedInfo != null) {
-                    setState(() {
-                      lane = updatedInfo['lane'] as int;
-                      board = updatedInfo['board'] as int;
-                      speed = updatedInfo['speed'] as double;
-                    });
-                  }
-                },
+                  ),
+                );
+
+                if (updatedInfo != null) {
+                  setState(() {
+                    lane = updatedInfo['lane'] as int;
+                    board = updatedInfo['board'] as int;
+                    speed = updatedInfo['speed'] as double;
+                  });
+                  session.updateShot(widget.frameIndex, widget.shotIndex, {
+                    'pins': pins,
+                    'lane': lane,
+                    'board': board,
+                    'speed': speed,
+                  });
+                }
+              },
+
                 child: Transform.scale(
                   scale: 0.8,
                   child: _buildInfoBar(lane, board, speed, 1),

@@ -142,9 +142,12 @@ Widget _buildPin(int pinNumber) {
         }
       });
       Navigator.pop(context, {
-        'pins': pins,
-        'outcome': symbol,
-      });
+  'pins': pins,
+  'outcome': symbol,
+  'lane': null,
+  'board': null,
+  'speed': null,
+});
     },
     child: Container(
       width: 28,
@@ -179,9 +182,12 @@ Widget _buildPin(int pinNumber) {
     child: TextButton(
       onPressed: () {
         Navigator.pop(context, {
-          'pins': pins,
-          'outcome': selectedOutcome,
-        });
+  'pins': pins,
+  'outcome': selectedOutcome,
+  'lane': null,
+  'board': null,
+  'speed': null,
+});
       },
       style: TextButton.styleFrom(
         padding: EdgeInsets.zero,

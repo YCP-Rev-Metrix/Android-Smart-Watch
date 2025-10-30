@@ -1,23 +1,15 @@
 import 'frame.dart';
 
 class GameSession {
-  final String sessionId;
-  final DateTime startTime;
-  DateTime? endTime;
-  bool isComplete;
-  List<Frame> frames;
+  String sessionId = "";
+  DateTime startTime = DateTime.now();
+  DateTime endTime = DateTime.now();
+  String establishment = "";
+  List<Frame> frames = [];
+  bool isComplete = false;
 
-  GameSession({
-    required this.sessionId,
-    required this.startTime,
-    this.endTime,
-    this.isComplete = false,
-    this.frames = const [],
-  });
-
-  Map<String, dynamic> toJson() => {};
-  static GameSession fromJson(Map<String, dynamic> json) => GameSession(
-        sessionId: '',
-        startTime: DateTime.now(),
-      );
+  void startSession() {}
+  void endSession() {}
+  String toJSON() => "";
+  static GameSession fromJSON(String json) => GameSession();
 }
