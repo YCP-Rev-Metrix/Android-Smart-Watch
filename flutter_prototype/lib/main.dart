@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
 import 'package:watch_app/pages/frame_page.dart';
-import 'package:watch_app/pages/home_page.dart';
+import 'package:watch_app/pages/game_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();

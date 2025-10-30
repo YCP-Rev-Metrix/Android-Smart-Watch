@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:watch_app/pages/home_page.dart';
+import 'package:watch_app/pages/game_page.dart';
 import 'shot_page.dart';
 import 'other_page.dart';
 import 'package:flutter/services.dart';
@@ -85,7 +85,7 @@ class _BowlingFrameState extends State<BowlingFrame> {
     if (details.primaryVelocity != null && details.primaryVelocity! > 200) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const HomePage()),
+        MaterialPageRoute(builder: (_) => const GameShell()),
       );
     }
   }
