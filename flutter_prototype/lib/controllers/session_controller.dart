@@ -1,4 +1,4 @@
-import '../models/game_session.dart';
+import '../models/session.dart';
 import 'local_cache.dart';
 import 'ble_manager.dart';
 

@@ -1,4 +1,4 @@
-import 'game_session.dart';
+import 'session.dart';
 
 class BLEPacket {
   final int packetId;

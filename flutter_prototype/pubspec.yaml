@@ -23,7 +23,7 @@ dev_dependencies:
   # to encourage good coding practices.
   flutter_lints: ^5.0.0
 
-  # 👇 Added tools for icons & splash
+  # Added tools for icons & splash
   flutter_launcher_icons: ^0.13.1
   flutter_native_splash: ^2.4.0
 
@@ -34,13 +34,13 @@ flutter:
   assets:
     - assets/RevMetrix_Logo.png
 
-# 👇 Launcher icon configuration
+# Launcher icon configuration
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/RevMetrix_Logo.png"
 
-# 👇 Splash screen configuration
+# Splash screen configuration
 flutter_native_splash:
   color: "#434343"
   image: "assets/RevMetrix_Logo.png"
