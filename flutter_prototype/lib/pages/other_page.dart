@@ -1,3 +1,4 @@
+// other_page.dart
 import 'package:flutter/material.dart';
 
 class OtherPage extends StatefulWidget {
@@ -36,7 +37,7 @@ class _OtherPageState extends State<OtherPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color.fromRGBO(67, 67, 67, 1),
+      backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
       extendBodyBehindAppBar: true,
       body: SafeArea(
         child: Center(
@@ -110,129 +111,129 @@ class _OtherPageState extends State<OtherPage> {
   }
 
   Widget _buildHorizontalPicker({
-  required String label,
-  required int currentValue,
-  required List<int> values,
-  required ValueChanged<int> onChanged,
-}) {
-  final controller = ScrollController(
-    initialScrollOffset: (currentValue - values.first) * _itemWidth,
-  );
+    required String label,
+    required int currentValue,
+    required List<int> values,
+    required ValueChanged<int> onChanged,
+  }) {
+    final controller = ScrollController(
+      initialScrollOffset: (currentValue - values.first) * _itemWidth,
+    );
 
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6.0),
-    child: Column(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-        ),
-        const SizedBox(height: 1),
+          const SizedBox(height: 1),
 
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final visibleWidth = constraints.maxWidth;
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final visibleWidth = constraints.maxWidth;
 
-            void centerOnValue(int index) {
-              final targetOffset =
-                  (index * _itemWidth) - (visibleWidth / 2) + (_itemWidth / 2);
-              controller.animateTo(
-                targetOffset.clamp(
-                  controller.position.minScrollExtent,
-                  controller.position.maxScrollExtent,
+              void centerOnValue(int index) {
+                final targetOffset =
+                    (index * _itemWidth) - (visibleWidth / 2) + (_itemWidth / 2);
+                controller.animateTo(
+                  targetOffset.clamp(
+                    controller.position.minScrollExtent,
+                    controller.position.maxScrollExtent,
+                  ),
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOut,
+                );
+              }
+
+              return Container(
+                height: 20,
+                width: 260,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Color(0xFF3A3A3A), 
+                      Color(0xFF5B5B5B),
+                      Color(0xFFDADADA), 
+                      Color(0xFF5B5B5B),
+                      Color(0xFF3A3A3A),
+                    ],
+                    stops: [0.0, 0.2, 0.5, 0.8, 1.0],
+                  ),
                 ),
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOut,
-              );
-            }
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: ShaderMask(
+                    shaderCallback: (rect) {
+                      return const LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Colors.transparent,
+                          Colors.white,
+                          Colors.white,
+                          Colors.transparent,
+                        ],
+                        stops: [0.0, 0.12, 0.88, 1.0],
+                      ).createShader(rect);
+                    },
+                    blendMode: BlendMode.dstIn,
+                    child: ListView.builder(
+                      controller: controller,
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: values.length,
+                      itemBuilder: (context, i) {
+                        final isSelected = values[i] == currentValue;
 
-            return Container(
-              height: 20,
-              width: 260,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    Color(0xFF3A3A3A), 
-                    Color(0xFF5B5B5B),
-                    Color(0xFFDADADA), 
-                    Color(0xFF5B5B5B),
-                    Color(0xFF3A3A3A),
-                  ],
-                  stops: [0.0, 0.2, 0.5, 0.8, 1.0],
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: ShaderMask(
-                  shaderCallback: (rect) {
-                    return const LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        Colors.transparent,
-                        Colors.white,
-                        Colors.white,
-                        Colors.transparent,
-                      ],
-                      stops: [0.0, 0.12, 0.88, 1.0],
-                    ).createShader(rect);
-                  },
-                  blendMode: BlendMode.dstIn,
-                  child: ListView.builder(
-                    controller: controller,
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    itemCount: values.length,
-                    itemBuilder: (context, i) {
-                      final isSelected = values[i] == currentValue;
-
-                      return GestureDetector(
-                        onTap: () {
-                          onChanged(values[i]);
-                          centerOnValue(i);
-                        },
-                        child: Container(
-                          width: _itemWidth,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            border: Border(
-                              right: BorderSide(
-                                color: Colors.black.withOpacity(0.2),
-                                width: 0.8, // thin vertical line
+                        return GestureDetector(
+                          onTap: () {
+                            onChanged(values[i]);
+                            centerOnValue(i);
+                          },
+                          child: Container(
+                            width: _itemWidth,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              border: Border(
+                                right: BorderSide(
+                                  color: Colors.black.withOpacity(0.2),
+                                  width: 0.8, // thin vertical line
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              label == 'Speed'
+                                  ? (values[i] / 10.0).toStringAsFixed(1)
+                                  : values[i].toString(),
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.black
+                                    : Colors.black.withOpacity(0.4),
+                                fontSize: isSelected ? 13 : 10,
+                                fontWeight: isSelected
+                                    ? FontWeight.normal
+                                    : FontWeight.bold
                               ),
                             ),
                           ),
-                          child: Text(
-                            label == 'Speed'
-                                ? (values[i] / 10.0).toStringAsFixed(1)
-                                : values[i].toString(),
-                            style: TextStyle(
-                              color: isSelected
-                                  ? Colors.black
-                                  : Colors.black.withOpacity(0.4),
-                              fontSize: isSelected ? 13 : 10,
-                              fontWeight: isSelected
-                                  ? FontWeight.normal
-                                  : FontWeight.bold
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-        ),
-      ],
-    ),
-  );
-}
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
 }

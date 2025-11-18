@@ -1,3 +1,4 @@
+// models/session.dart
 import 'game.dart';
 
 class GameSession {
@@ -6,7 +7,7 @@ class GameSession {
   DateTime? endTime;
   bool isComplete;
   int numOfGames;
-  List<String> balls;
+  List<String> balls; // array of ball names/ids
   List<Game> games;
 
   GameSession({
@@ -18,6 +19,17 @@ class GameSession {
     this.balls = const [],
     this.games = const [],
   });
+
+  // Factory now requires the sessionId passed in (e.g., from BLE)
+  factory GameSession.newSession(String sessionId) {
+    return GameSession(
+      sessionId: sessionId,
+      startTime: DateTime.now(),
+      numOfGames: 1,
+      balls: ['1', '2', '3'], // Example ball names/ids
+      games: [Game.newGame(1)],
+    );
+  }
 
   /// Returns the active game (first incomplete)
   Game? get activeGame {
@@ -35,27 +47,27 @@ class GameSession {
   }
 
   Map<String, dynamic> toJson() => {
-        'sessionId': sessionId,
-        'startTime': startTime.toIso8601String(),
-        'endTime': endTime?.toIso8601String(),
-        'isComplete': isComplete,
-        'numOfGames': numOfGames,
-        'balls': balls,
-        'games': games.map((g) => g.toJson()).toList(),
-      };
+    'sessionId': sessionId,
+    'startTime': startTime.toIso8601String(),
+    'endTime': endTime?.toIso8601String(),
+    'isComplete': isComplete,
+    'numOfGames': numOfGames,
+    'balls': balls,
+    'games': games.map((g) => g.toJson()).toList(),
+  };
 
   static GameSession fromJson(Map<String, dynamic> json) => GameSession(
-        sessionId: json['sessionId'] ?? '',
-        startTime: DateTime.tryParse(json['startTime'] ?? '') ?? DateTime.now(),
-        endTime: json['endTime'] != null
-            ? DateTime.tryParse(json['endTime'])
-            : null,
-        isComplete: json['isComplete'] ?? false,
-        numOfGames: json['numOfGames'] ?? 1,
-        balls: List<String>.from(json['balls'] ?? []),
-        games: (json['games'] as List<dynamic>?)
-                ?.map((g) => Game.fromJson(g))
-                .toList() ??
-            [],
-      );
+    sessionId: json['sessionId'] ?? '',
+    startTime: DateTime.tryParse(json['startTime'] ?? '') ?? DateTime.now(),
+    endTime: json['endTime'] != null
+        ? DateTime.tryParse(json['endTime'])
+        : null,
+    isComplete: json['isComplete'] ?? false,
+    numOfGames: json['numOfGames'] ?? 1,
+    balls: List<String>.from(json['balls'] ?? []),
+    games: (json['games'] as List<dynamic>?)
+        ?.map((g) => Game.fromJson(g))
+        .toList() ??
+        [],
+  );
 }

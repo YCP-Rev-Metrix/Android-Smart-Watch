@@ -1,8 +1,14 @@
+// pages/frame_page.dart
 import 'package:flutter/material.dart';
-import 'package:watch_app/pages/game_page.dart';
+import 'package:flutter/services.dart';
+import 'game_page.dart'; // Assuming GameShell is in game_page.dart
 import 'shot_page.dart';
 import 'other_page.dart';
-import 'package:flutter/services.dart';
+import '../controllers/session_controller.dart';
+
+// Global access to the controller
+final SessionController _sessionController = SessionController(); 
+
 
 class FrameShell extends StatefulWidget {
   const FrameShell({super.key});
@@ -12,7 +18,9 @@ class FrameShell extends StatefulWidget {
 }
 
 class _FrameShellState extends State<FrameShell> {
-  int _activeFrame = 0;
+  // We should ideally track the current active frame based on the GameSession state
+  // For now, keeping the UI frame index tracking for frame selection mode
+  int _activeFrameIndex = 0; // 0-based index (0=Frame 1)
   bool _frameSelectMode = false;
 
   final List<Color> frameColors = [
@@ -33,13 +41,19 @@ class _FrameShellState extends State<FrameShell> {
   void _selectFrame(int index) {
     HapticFeedback.lightImpact();
     setState(() {
-      _activeFrame = index;
+      _activeFrameIndex = index;
       _frameSelectMode = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    // In a real app, this should look up the current active frame/game
+    final currentShotNumber = (_sessionController.currentSession?.games
+            .expand((g) => g.frames)
+            .where((f) => f.shot != null)
+            .length ?? 0) + 1;
+            
     return WillPopScope(
       onWillPop: () async => _frameSelectMode,
       child: GestureDetector(
@@ -49,12 +63,13 @@ class _FrameShellState extends State<FrameShell> {
           fit: StackFit.expand,
           children: [
             BowlingFrame(
-              color: frameColors[_activeFrame],
-              index: _activeFrame,
+              color: frameColors[_activeFrameIndex % frameColors.length], // Cycle colors
+              frameIndex: _activeFrameIndex, // 0-based
+              shotNumber: currentShotNumber,
             ),
             if (_frameSelectMode)
               FrameSelectionOverlay(
-                activeFrame: _activeFrame,
+                activeFrame: _activeFrameIndex,
                 colors: frameColors,
                 onSelect: _selectFrame,
                 onCancel: _exitFrameSelection,
@@ -67,10 +82,19 @@ class _FrameShellState extends State<FrameShell> {
 }
 
 
+// --- BowlingFrame ---
+
 class BowlingFrame extends StatefulWidget {
   final Color color;
-  final int index;
-  const BowlingFrame({super.key, required this.color, required this.index});
+  final int frameIndex; // 0-based index
+  final int shotNumber; // Global sequential shot number
+
+  const BowlingFrame({
+    super.key,
+    required this.color,
+    required this.frameIndex,
+    required this.shotNumber,
+  });
 
   @override
   State<BowlingFrame> createState() => _BowlingFrameState();
@@ -78,9 +102,32 @@ class BowlingFrame extends StatefulWidget {
 
 class _BowlingFrameState extends State<BowlingFrame> {
   final PageController _controller = PageController();
+  // State 0 = Shot 1, State 1 = Shot 2 (based on PageView index)
+  int _shotIndex = 0; // 0-based index for the PageView
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onPageScroll);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onPageScroll);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onPageScroll() {
+    final newIndex = _controller.page?.round() ?? _shotIndex;
+    if (newIndex != _shotIndex) {
+      setState(() => _shotIndex = newIndex);
+    }
+  }
 
   void _onVerticalSwipe(DragEndDetails details) {
     if (details.primaryVelocity != null && details.primaryVelocity! > 200) {
+      // Swipe down to navigate to Game/Score page
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const GameShell()),
@@ -97,13 +144,30 @@ class _BowlingFrameState extends State<BowlingFrame> {
         controller: _controller,
         physics: const BouncingScrollPhysics(),
         children: [
-          BowlingShot(color: widget.color, frameIndex: widget.index, shotIndex: 1),
-          BowlingShot(color: widget.color.withOpacity(0.85), frameIndex: widget.index, shotIndex: 2),
+          // Shot 1 (Page 0)
+          BowlingShot(
+            key: ValueKey('${widget.frameIndex}-1'), // Key is crucial for state separation
+            color: widget.color,
+            frameIndex: widget.frameIndex,
+            shotIndex: 1, // 1-based local shot
+            globalShotNumber: widget.shotNumber,
+          ),
+          // Shot 2 (Page 1)
+          BowlingShot(
+            key: ValueKey('${widget.frameIndex}-2'),
+            color: widget.color.withOpacity(0.85),
+            frameIndex: widget.frameIndex,
+            shotIndex: 2, // 1-based local shot
+            globalShotNumber: widget.shotNumber,
+          ),
         ],
       ),
     );
   }
 }
+
+
+// --- FrameSelectionOverlay (No changes needed) ---
 
 class FrameSelectionOverlay extends StatefulWidget {
   final int activeFrame;
@@ -219,15 +283,20 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
   }
 }
 
+
+// --- BowlingShot (Refactored for Model Integration) ---
+
 class BowlingShot extends StatefulWidget {
-  final int frameIndex;
-  final int shotIndex;
+  final int frameIndex; // 0-based
+  final int shotIndex; // 1-based (1 or 2)
+  final int globalShotNumber; // Sequential overall shot number
   final Color color;
 
   const BowlingShot({
     super.key,
     required this.frameIndex,
     required this.shotIndex,
+    required this.globalShotNumber,
     required this.color,
   });
 
@@ -236,39 +305,125 @@ class BowlingShot extends StatefulWidget {
 }
 
 class _BowlingShotState extends State<BowlingShot> {
-  List<bool> pins = List.filled(10, false);
+  // State variables for shot data (Non-final, mutable)
+  List<bool> pinsStanding = List.filled(10, true); // true = standing (Initial state: all up)
   int lane = 1;
   int board = 18;
   double speed = 15.0;
   int ball = 1;
+  String? position; // Stores 'X', '/', 'F' or count string
+
+  // The state of the pins *before* this specific shot attempt.
+  List<bool> _getInitialPins() {
+    // Logic to determine initial pins for this specific shot in a frame.
+    if (widget.shotIndex == 1) {
+      return List.filled(10, true); // Always 10 pins for the first shot
+    }
+    
+    // For Shot 2, we need the pins that were left standing after Shot 1.
+    // This is complex and requires looking up the Shot 1 result from the Controller/GameSession.
+    // Placeholder implementation: Assume all were down if Shot 1 hasn't been recorded.
+    // *** IN A REAL APP: You must fetch the leaveType from the previous Shot. ***
+    
+    // TEMPORARY LOGIC: If we don't fetch the actual state, we use the last recorded state.
+    // Since we're navigating away to ShotPage and coming back, we rely on the controller/state mgmt
+    // to give us the previous frame's result or the pinsStanding from the state.
+    
+    // For now, to prevent the UI from being too complex, we'll initialize pinsStanding to 10
+    // and rely on the navigation flow to update it correctly. 
+    return pinsStanding;
+  }
+  
+  void _recordShot(Map<String, dynamic> shotResult) async {
+    // 1. Get Pin/Outcome data from ShotPage
+    final List<bool> returnedPinsStanding = shotResult['pinsStanding'] as List<bool>;
+    final int pinsDownCount = shotResult['pinsDownCount'] as int;
+    final String? outcome = shotResult['outcome'] as String?;
+    final bool isFoul = shotResult['isFoul'] as bool;
+
+    // 2. Get Lane/Board/Speed data from OtherPage (if not already done)
+    // We assume the user has either previously set these or uses the defaults.
+    
+    // 3. Update local state
+    setState(() {
+      pinsStanding = returnedPinsStanding;
+      position = outcome;
+    });
+
+    // 4. Record the shot using the SessionController
+    _sessionController.recordShot(
+      // Data from OtherPage
+      lane: lane,
+      speed: speed,
+      hitBoard: board,
+      ball: ball, // Using default ball 1 for now
+      
+      // Data from ShotPage
+      pinsStanding: returnedPinsStanding, // true = standing
+      pinsDownCount: pinsDownCount,
+      position: outcome ?? pinsDownCount.toString(), // Use count if no X, /, F
+      isFoul: isFoul,
+    );
+    
+    // 5. Check if the frame needs to advance page or frame
+    // (Omitted: This logic would involve checking for Strike/Spare/Open/Foul and using the PageController to change to Shot 2 or the next Frame.)
+  }
+
+  void _showShotPages() async {
+    // 1. Navigation to OtherPage (to confirm/set lane/board/speed)
+    final updatedInfo = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OtherPage(
+          lane: lane,
+          board: board,
+          speed: speed,
+          shotNumber: widget.globalShotNumber,
+        ),
+      ),
+    );
+    
+    if (updatedInfo != null) {
+      setState(() {
+        lane = updatedInfo['lane'] as int;
+        board = updatedInfo['board'] as int;
+        speed = updatedInfo['speed'] as double;
+      });
+    }
+
+    // 2. Navigation to ShotPage (to record pins/count/outcome)
+    final shotResult = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ShotPage(
+          initialPins: _getInitialPins(), // Pins standing before THIS shot
+          shotNumber: widget.globalShotNumber,
+        ),
+      ),
+    );
+
+    if (shotResult != null) {
+      _recordShot(shotResult);
+    }
+  }
 
 
 @override
 Widget build(BuildContext context) {
+  // Use the local state variable 'lane' (which is non-final)
+  final displayFrameNumber = widget.frameIndex + 1; // 1-based Frame number
+
   return Scaffold(
-    backgroundColor: Color.fromRGBO(67, 67, 67, 1),
+    backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
     extendBodyBehindAppBar: true,
     body: Center(
       child: GestureDetector(
-        onTap: () async {
-          final result = await Navigator.push<Map<String, dynamic>>(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ShotPage(
-                initialPins: List.from(pins),
-                shotNumber: widget.shotIndex,
-              ),
-            ),
-          );
-          if (result != null) {
-            setState(() => pins = result['pins'] as List<bool>);
-          }
-        },
+        onTap: _showShotPages,
         child: Container(
           width: 280,
           height: 280,
-          decoration: const BoxDecoration(
-            color: Color.fromRGBO(67, 67, 67, 1),
+          decoration: BoxDecoration(
+            color: widget.color, // Use the frame's color
             shape: BoxShape.circle,
           ),
           child: Column(
@@ -276,7 +431,7 @@ Widget build(BuildContext context) {
             children: [
               const SizedBox(height: 24),
               Text(
-                'Frame ${widget.frameIndex + 1} — Shot ${widget.shotIndex}',
+                'Frame $displayFrameNumber — Shot ${widget.shotIndex}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -284,36 +439,23 @@ Widget build(BuildContext context) {
                 ),
               ),
               const SizedBox(height: 12),
-              _buildPinDisplay(pins),
+              // Display the pins STANDING (pinsStanding = true for up)
+              _buildPinDisplay(pinsStanding),
               const SizedBox(height: 6),
 
-              // 👇 Info Bar (Data Section)
-              GestureDetector(
-                onTap: () async {
-                  final updatedInfo = await Navigator.push<Map<String, dynamic>>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => OtherPage(
-                        lane: lane,
-                        board: board,
-                        speed: speed,
-                        shotNumber: widget.shotIndex,
-                      ),
-                    ),
-                  );
-                  if (updatedInfo != null) {
-                    setState(() {
-                      lane = updatedInfo['lane'] as int;
-                      board = updatedInfo['board'] as int;
-                      speed = updatedInfo['speed'] as double;
-                    });
-                  }
-                },
-                child: Transform.scale(
-                  scale: 0.8,
-                  child: _buildInfoBar(lane, board, speed, 1),
-                ),
+              // 👇 Info Bar (Data Section - Tap to edit)
+              // The tap is now on the whole circle via the parent GestureDetector
+              Transform.scale(
+                scale: 0.8,
+                child: _buildInfoBar(lane, board, speed, ball), // Pass local state variables
               ),
+              
+              // Simple display of last recorded outcome
+              if (position != null) 
+                Text(
+                  'Last Shot: $position',
+                  style: const TextStyle(color: Colors.white70, fontSize: 10),
+                )
             ],
           ),
         ),
@@ -351,51 +493,54 @@ Widget build(BuildContext context) {
 
   Widget _buildPin(int pinNumber, List<bool> pins) {
     final index = pinNumber - 1;
-    final isDown = pins[index];
+    // pins[index] is true if STANDING (UP)
+    final isStanding = pins[index]; 
     return Container(
       width: 18,
       height: 18,
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
       decoration: BoxDecoration(
-        color: isDown ? const Color.fromRGBO(153, 153, 153, 1) : const Color.fromRGBO(142, 124, 195, 1),
+        // Color logic updated: STANDING uses the purple color (like in shot_page)
+        color: isStanding ? const Color.fromRGBO(142, 124, 195, 1) : const Color.fromRGBO(153, 153, 153, 1),
         shape: BoxShape.circle,
         border: Border.all(color: Colors.black, width: 0.5),
       ),
     );
   }
 
-  Widget _buildInfoBar(int lane, int board, double speed, int ball, {double height = 50}) {
-  return Container(
-    height: height,
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(
-      color: const Color.fromRGBO(153, 153, 153, 1),
-      border: Border.all(color: Colors.black, width: 0.5),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildInfoCell('Lane', lane.toString()),
-        _buildDivider(),
-        _buildInfoCell('Board', board.toString()),
-        _buildDivider(),
-        _buildInfoCell('Speed', speed.toStringAsFixed(1)),
-        _buildDivider(),
-        _buildInfoCell('Ball', '1'),
-      ],
-    ),
-  );
-}
+  // Adjusted _buildInfoBar to match signature and removed unused height param
+  Widget _buildInfoBar(int lane, int board, double speed, int ball) {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color.fromRGBO(153, 153, 153, 1),
+        border: Border.all(color: Colors.black, width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildInfoCell('Lane', lane.toString()),
+          _buildDivider(),
+          _buildInfoCell('Board', board.toString()),
+          _buildDivider(),
+          _buildInfoCell('Speed', speed.toStringAsFixed(1)),
+          _buildDivider(),
+          _buildInfoCell('Ball', ball.toString()),
+        ],
+      ),
+    );
+  }
 
-Widget _buildDivider() {
-  return Container(
-    width: 1,
-    height: 24,
-    color: Colors.black.withOpacity(0.4),
-    margin: const EdgeInsets.symmetric(horizontal: 3),
-  );
-}
+  Widget _buildDivider() {
+    return Container(
+      width: 1,
+      height: 24,
+      color: Colors.black.withOpacity(0.4),
+      margin: const EdgeInsets.symmetric(horizontal: 3),
+    );
+  }
 
 
   Widget _buildInfoCell(String label, String value) {
