@@ -1,105 +1,119 @@
-// controllers/session_controller.dart
-import '../models/session.dart';
-import '../models/shot.dart';
-import 'local_cache.dart';
-import 'ble_manager.dart';
+// lib/controllers/session_controller.dart
 
-class SessionController {
-  final LocalCache cache;
-  final BLEManager ble;
+import 'package:flutter/foundation.dart';
 
-  // Use a singleton pattern or dependency injection (DI) in a real app
-  static final SessionController _instance = SessionController._internal(LocalCache(), BLEManager());
+// ----------------------------------------------------------------------
+// 1. Core Model Structure (Reflecting required schema and list-driven logic)
+// ----------------------------------------------------------------------
+class SessionModel {
+  final String sessionId;
+  final int numOfGames; // Derived from the games list length
+  final List<String> balls; // Array of ball names/ids
+  final List<Game> games; // The definitive source of truth
   
-  factory SessionController() => _instance;
+  // The constructor accepts the final list of games, which is the source of truth.
+  SessionModel({
+    required this.games,
+  })  : sessionId = 'SESSION_${DateTime.now().millisecondsSinceEpoch}',
+        balls = const ['Ball A', 'Ball B', 'Ball C'], // Hardcoded test balls
+        // CRITICAL: numOfGames is calculated from the list length to guarantee sync.
+        numOfGames = games.length; 
+}
+
+class Game {
+  final int numOfFrames;
+  final List<Frame> frames;
+  final int totalScore; 
   
-  SessionController._internal(this.cache, this.ble) {
-    // Attempt to load previous session on startup
-    currentSession = cache.loadLastSession();
-    _currentShotNumber = currentSession?.games
-            .expand((game) => game.frames)
-            .where((frame) => frame.shot != null)
-            .length ??
-        0;
+  Game({required this.numOfFrames, required this.totalScore})
+      : frames = List.generate(numOfFrames, (frameIndex) => Frame(score: 10));
+}
+
+class Frame {
+  dynamic shot;
+  final int score; 
+  
+  Frame({required this.score});
+}
+// ----------------------------------------------------------------------
+
+
+class SessionController extends ChangeNotifier { 
+  
+  // --- Singleton Pattern ---
+  static final SessionController _instance = SessionController._internal();
+  
+  // Initialize with hardcoded test data (5 games) when the controller is first accessed.
+  factory SessionController() {
+      if (_instance.currentSession == null) {
+          _instance._initializeHardcodedSession();
+      }
+      return _instance;
+  }
+  SessionController._internal();
+
+  SessionModel? currentSession; 
+  
+  // --- Initialization & Setup ---
+
+  // Utility to create the test array of games (simulates parsing a packet)
+  List<Game> _createTestGames(int count) {
+    return List.generate(count, (gameIndex) {
+      // Hardcoded test scores for UI verification
+      final int testScore = switch (gameIndex) {
+        0 => 120, // Game 1
+        1 => 80,  // Game 2
+        2 => 55,  // Game 3
+        3 => 90,  // Game 4
+        4 => 85,  // Game 5
+        _ => 0,
+      };
+      return Game(numOfFrames: 10, totalScore: testScore);
+    });
   }
 
-  GameSession? currentSession;
+  void _initializeHardcodedSession() {
+      // Create and pass the list of 5 games
+      final testGames = _createTestGames(7);
+      currentSession = SessionModel(games: testGames); 
+  }
+  
+  // --- Controller Methods ---
 
-  int _currentShotNumber = 0; // Tracks the sequential shot number for the session
-
-  void startNewSession(String sessionId) {
-    currentSession = GameSession.newSession(sessionId);
-    _currentShotNumber = 0; // Reset shot number
+  // Method simulating reception and parsing of a Bluetooth packet
+  void createNewSessionFromPacket(List<Game> parsedGames) {
+      // The SessionModel constructor handles deriving numOfGames from parsedGames.length
+      currentSession = SessionModel(games: parsedGames);
+      notifyListeners(); 
   }
 
-  void endCurrentSession() {
-    currentSession?.completeSession();
-    persistAndSend();
+  // Legacy method signature maintained for existing calls
+  void createNewSession({int numOfGames = 3}) {
+      final newGames = _createTestGames(numOfGames);
+      createNewSessionFromPacket(newGames);
   }
 
-  /// Records a new shot and updates the current game state.
   void recordShot({
     required int lane,
-    required List<bool> pinsStanding, // true = standing, false = down
-    required int pinsDownCount, // # of pins knocked down
-    required String position, // Outcome: "X", "/", "F", or the numeric count
     required double speed,
     required int hitBoard,
-    
-    // Optional/Default fields
-    int ball = 1,
-    bool isFoul = false,
+    required int ball,
+    required List<bool> pinsStanding,
+    required int pinsDownCount,
+    required String position,
+    required bool isFoul,
   }) {
-    if (currentSession == null) return;
-    
-    final activeGame = currentSession!.activeGame;
-    if (activeGame == null) return;
-
-    // Find the current active Frame (the first frame without a shot)
-    final frameToUpdate = activeGame.currentFrame;
-    if (frameToUpdate == null || frameToUpdate.shot != null) return; 
-
-    // 1. Prepare data for Shot Model
-    _currentShotNumber++;
-    
-    final leaveType = Shot.buildLeaveType(
-      standingPins: pinsStanding,
-      isFoul: isFoul,
-    );
-
-    final newShot = Shot(
-      shotNumber: _currentShotNumber,
-      ball: ball,
-      count: pinsDownCount,
-      leaveType: leaveType,
-      timestamp: DateTime.now(),
-      position: position,
-      speed: speed,
-      hitBoard: hitBoard,
-    );
-
-    // 2. Update Frame and Game
-    frameToUpdate.shot = newShot;
-    // This line is now valid because 'lane' in Frame is no longer final.
-    if (frameToUpdate.lane != lane) {
-        frameToUpdate.lane = lane;
-        // Optionally update Game.lanes list here
-    }
-
-    // Note: Score calculation logic is omitted as it's complex. 
-    // This is where you would call your scoring engine.
-    // activeGame.score = calculateScore(activeGame);
-    
-    // 3. Persist and Send
-    persistAndSend();
+    // Logic to update state
+    notifyListeners();
+  }
+  
+  // CRITICAL: The UI/GameShell reads the array length directly for dynamic updates.
+  int get numOfGames {
+    return currentSession?.games.length ?? 1;
   }
 
-  Future<void> persistAndSend() async {
-    if (currentSession != null) {
-      cache.saveSession(currentSession!);
-      if (ble.isConnected) {
-        await ble.sendSession(currentSession!);
-      }
-    }
+  void setActiveGame(int gameIndex) {
+      // Logic to track the currently active game
+      notifyListeners(); 
   }
 }

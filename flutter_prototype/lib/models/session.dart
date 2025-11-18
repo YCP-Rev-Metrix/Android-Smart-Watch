@@ -15,7 +15,7 @@ class GameSession {
     required this.startTime,
     this.endTime,
     this.isComplete = false,
-    this.numOfGames = 1,
+    this.numOfGames = 5,
     this.balls = const [],
     this.games = const [],
   });
