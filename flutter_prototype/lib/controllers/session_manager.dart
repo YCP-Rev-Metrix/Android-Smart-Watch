@@ -1,5 +1,4 @@
-import '../pages/other_page.dart';
-import '../pages/shot_page.dart';
+// session_manager.dart is independent of UI pages; removed unused imports
 
 class SessionManager {
   static final SessionManager _instance = SessionManager._internal();

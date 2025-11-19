@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:watch_app/pages/shot_page.dart';
 import 'package:watch_app/pages/other_page.dart';
-import 'package:watch_app/pages/home_page.dart';
+import 'package:watch_app/pages/game_page.dart';
 
 void main() {
 
@@ -26,8 +26,8 @@ void main() {
     expect(find.text('Submit'), findsOneWidget);
   });
 
-  testWidgets('HomePage loads and returns safely', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: HomePage()));
-    expect(find.byType(HomePage), findsOneWidget);
+  testWidgets('GameShell loads and returns safely', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: GameShell()));
+    expect(find.byType(GameShell), findsOneWidget);
   });
 }
