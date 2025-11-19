@@ -26,22 +26,20 @@ class _FrameShellState extends State<FrameShell> {
   int _activeFrameIndex = 0; // 0-based index (0=Frame 1)
   bool _frameSelectMode = false;
 
-  final List<Color> frameColors = [
-    Colors.grey.shade900,
-    Colors.grey.shade800,
-    Colors.grey.shade700,
+  // 🎯 MODIFIED: All frameColors are now the same dark grey for a unified background
+  final List<Color> frameColors = const [
+    Color.fromRGBO(67, 67, 67, 1),
+    Color.fromRGBO(67, 67, 67, 1),
+    Color.fromRGBO(67, 67, 67, 1),
   ];
   
-  // 🎯 FIX: Swipe logic needs to be here, attached to the main screen GestureDetector
   void _onVerticalSwipe(DragEndDetails details) {
     if (details.primaryVelocity == null) return;
 
-    // Swipe down (positive velocity) → go back to GameShell (Scoreboard)
     if (details.primaryVelocity! > 200) {
       HapticFeedback.mediumImpact();
       Navigator.push(
         context,
-        // Using MaterialPageRoute for navigation logic (you might use pop if pushing from GameShell was replaced)
         MaterialPageRoute(builder: (_) => const GameShell()),
       );
     }
@@ -73,19 +71,16 @@ class _FrameShellState extends State<FrameShell> {
             
     return WillPopScope(
       onWillPop: () async => _frameSelectMode,
-      // 🎯 CRITICAL: GestureDetector is attached here for the whole screen
       child: GestureDetector(
         onLongPress: _enterFrameSelection,
-        // 🎯 CRITICAL: Attach the swipe handler here
         onVerticalDragEnd: _onVerticalSwipe, 
         behavior: HitTestBehavior.opaque,
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // BowlingFrame contains the actual UI (PageView)
             BowlingFrame(
-              color: frameColors[_activeFrameIndex % frameColors.length], // Cycle colors
-              frameIndex: _activeFrameIndex, // 0-based
+              color: frameColors[_activeFrameIndex % frameColors.length], 
+              frameIndex: _activeFrameIndex, 
               shotNumber: currentShotNumber,
             ),
             if (_frameSelectMode)
@@ -124,16 +119,7 @@ class BowlingFrame extends StatefulWidget {
 
 class _BowlingFrameState extends State<BowlingFrame> {
   final PageController _controller = PageController();
-  int _shotIndex = 0; // 0-based index for the PageView
   
-  // State variables for shot data (must be present for _recordShot and UI display)
-  List<bool> pinsStanding = List.filled(10, true);
-  int lane = 1;
-  int board = 18;
-  double speed = 15.0;
-  int ball = 1;
-  String? position;
-
   @override
   void initState() {
     super.initState();
@@ -148,184 +134,11 @@ class _BowlingFrameState extends State<BowlingFrame> {
   }
 
   void _onPageScroll() {
-    final newIndex = _controller.page?.round() ?? _shotIndex;
-    if (newIndex != _shotIndex) {
-      setState(() => _shotIndex = newIndex);
-    }
-  }
-
-  // NOTE: Swipe logic is removed from here and placed in FrameShell to cover the entire screen.
-  
-  // Required methods for BowlingShot functionality
-  List<bool> _getInitialPins() {
-    // Logic for Shot 1: Always 10 pins (true)
-    if (_shotIndex == 0) { // Shot index 0 is first shot
-      return List.filled(10, true);
-    }
-    // For Shot 2: Pins left standing after Shot 1
-    return pinsStanding;
-  }
-
-  void _recordShot(Map<String, dynamic> shotResult) async {
-    final List<bool> returnedPinsStanding = shotResult['pinsStanding'] as List<bool>;
-    final int pinsDownCount = shotResult['pinsDownCount'] as int;
-    final String? outcome = shotResult['outcome'] as String?;
-    final bool isFoul = shotResult['isFoul'] as bool;
-
-    setState(() {
-      pinsStanding = returnedPinsStanding;
-      position = outcome;
-    });
-
-    _sessionController.recordShot(
-      lane: lane,
-      speed: speed,
-      hitBoard: board,
-      ball: ball, 
-      pinsStanding: returnedPinsStanding,
-      pinsDownCount: pinsDownCount,
-      position: outcome ?? pinsDownCount.toString(),
-      isFoul: isFoul,
-    );
-  }
-
-  void _showShotPages() async {
-    // 1. Navigation to OtherPage (to confirm/set lane/board/speed)
-    final updatedInfo = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => OtherPage(
-          lane: lane,
-          board: board,
-          speed: speed,
-          shotNumber: widget.shotNumber, // Passing global shot number
-        ),
-      ),
-    );
-    
-    if (updatedInfo != null) {
-      setState(() {
-        lane = updatedInfo['lane'] as int;
-        board = updatedInfo['board'] as int;
-        speed = updatedInfo['speed'] as double;
-      });
-    }
-
-    // 2. Navigation to ShotPage (to record pins/count/outcome)
-    final shotResult = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ShotPage(
-          initialPins: _getInitialPins(),
-          shotNumber: widget.shotNumber, // Passing global shot number
-        ),
-      ),
-    );
-
-    if (shotResult != null) {
-      _recordShot(shotResult);
-    }
-  }
-  
-  // Utility methods for the UI (restored from previous versions)
-  Widget _buildPinDisplay(List<bool> pins) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [7, 8, 9, 10].map((p) => _buildPin(p, pins)).toList(),
-        ),
-        const SizedBox(height: 3),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [4, 5, 6].map((p) => _buildPin(p, pins)).toList(),
-        ),
-        const SizedBox(height: 3),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [2, 3].map((p) => _buildPin(p, pins)).toList(),
-        ),
-        const SizedBox(height: 3),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [_buildPin(1, pins)],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPin(int pinNumber, List<bool> pins) {
-    final index = pinNumber - 1;
-    final isStanding = pins.length > index ? pins[index] : true; // Safety check
-    return Container(
-      width: 18,
-      height: 18,
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-      decoration: BoxDecoration(
-        color: isStanding ? const Color.fromRGBO(142, 124, 195, 1) : const Color.fromRGBO(153, 153, 153, 1),
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.black, width: 0.5),
-      ),
-    );
-  }
-
-  Widget _buildInfoBar(int lane, int board, double speed, int ball) {
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: const Color.fromRGBO(153, 153, 153, 1),
-        border: Border.all(color: Colors.black, width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildInfoCell('Lane', lane.toString()),
-          _buildDivider(),
-          _buildInfoCell('Board', board.toString()),
-          _buildDivider(),
-          _buildInfoCell('Speed', speed.toStringAsFixed(1)),
-          _buildDivider(),
-          _buildInfoCell('Ball', ball.toString()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Container(
-      width: 1,
-      height: 24,
-      color: Colors.black.withOpacity(0.4),
-      margin: const EdgeInsets.symmetric(horizontal: 3),
-    );
-  }
-
-
-  Widget _buildInfoCell(String label, String value) {
-    return Container(
-      width: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: const TextStyle(color: Colors.black, fontSize: 10),
-          ),
-          Text(
-            value,
-            style: const TextStyle(color: Colors.black, fontSize: 14),
-          ),
-        ],
-      ),
-    );
+    // No specific action needed here for background color change
   }
 
   @override
   Widget build(BuildContext context) {
-    // NOTE: GestureDetector is NOT here, it is in FrameShell now.
     return PageView(
       controller: _controller,
       physics: const BouncingScrollPhysics(),
@@ -333,28 +146,18 @@ class _BowlingFrameState extends State<BowlingFrame> {
         // Shot 1 (Page 0)
         BowlingShot(
           key: ValueKey('${widget.frameIndex}-1'), 
-          color: widget.color,
+          color: widget.color, // This will now be the unified dark grey
           frameIndex: widget.frameIndex,
-          shotIndex: 1, // 1-based local shot
+          shotIndex: 1, 
           globalShotNumber: widget.shotNumber,
-          showPages: _showShotPages,
-          lane: lane, board: board, speed: speed, 
-          position: position, pinsStanding: _getInitialPins(), // Use initial pins for display
-          buildPinDisplay: _buildPinDisplay,
-          buildInfoBar: _buildInfoBar,
         ),
         // Shot 2 (Page 1)
         BowlingShot(
           key: ValueKey('${widget.frameIndex}-2'),
-          color: widget.color.withOpacity(0.85),
+          color: widget.color, // 🎯 MODIFIED: Removed .withOpacity to match
           frameIndex: widget.frameIndex,
-          shotIndex: 2, // 1-based local shot
+          shotIndex: 2, 
           globalShotNumber: widget.shotNumber,
-          showPages: _showShotPages,
-          lane: lane, board: board, speed: speed, 
-          position: position, pinsStanding: _getInitialPins(), // Use pins left from Shot 1
-          buildPinDisplay: _buildPinDisplay,
-          buildInfoBar: _buildInfoBar,
         ),
       ],
     );
@@ -362,7 +165,7 @@ class _BowlingFrameState extends State<BowlingFrame> {
 }
 
 // #############################################################
-//                         3. FRAME SELECTION OVERLAY
+//                         3. FRAME SELECTION OVERLAY (Unchanged for logic, but colors will reflect change)
 // #############################################################
 
 class FrameSelectionOverlay extends StatefulWidget {
@@ -456,7 +259,7 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
                       width: circleSize,
                       height: circleSize,
                       decoration: BoxDecoration(
-                        color: widget.colors[i],
+                        color: widget.colors[i], // This will now be the unified dark grey
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
@@ -487,25 +290,14 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
 }
 
 // #############################################################
-//                         4. BOWLING SHOT (Data Input UI)
+//                         4. BOWLING SHOT (Unified Background)
 // #############################################################
 
-class BowlingShot extends StatelessWidget {
-  final int frameIndex;
-  final int shotIndex;
+class BowlingShot extends StatefulWidget {
+  final int frameIndex; // 0-based
+  final int shotIndex; // 1-based (1 or 2)
   final int globalShotNumber;
-  final Color color;
-  final VoidCallback showPages; 
-  final int lane;
-  final int board;
-  final double speed;
-  final String? position;
-  final List<bool> pinsStanding;
-  final int ball = 1;
-
-  // Function types passed from the parent state to build UI components
-  final Widget Function(List<bool>) buildPinDisplay;
-  final Widget Function(int, int, double, int) buildInfoBar;
+  final Color color; // This will now always be the unified dark grey
 
   const BowlingShot({
     super.key,
@@ -513,31 +305,199 @@ class BowlingShot extends StatelessWidget {
     required this.shotIndex,
     required this.globalShotNumber,
     required this.color,
-    required this.showPages,
-    required this.lane,
-    required this.board,
-    required this.speed,
-    required this.position,
-    required this.pinsStanding,
-    required this.buildPinDisplay,
-    required this.buildInfoBar,
   });
 
   @override
+  State<BowlingShot> createState() => _BowlingShotState();
+}
+
+class _BowlingShotState extends State<BowlingShot> {
+  List<bool> pinsDown = List.filled(10, false); 
+  int lane = 1;
+  int board = 18;
+  double speed = 15.0;
+  int ball = 1;
+  String? position;
+  
+  List<bool> _getPinsStandingForDisplay() {
+    return pinsDown.map((isDown) => !isDown).toList(); 
+  }
+
+  void _openOtherPage() async {
+    final updatedInfo = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OtherPage(
+          lane: lane,
+          board: board,
+          speed: speed,
+          shotNumber: widget.globalShotNumber,
+        ),
+      ),
+    );
+
+    if (updatedInfo != null) {
+      setState(() {
+        lane = updatedInfo['lane'] as int;
+        board = updatedInfo['board'] as int;
+        speed = updatedInfo['speed'] as double;
+      });
+    }
+  }
+
+  void _openShotPage() async {
+    final initialPinsStanding = _getPinsStandingForDisplay();
+
+    final shotResult = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ShotPage(
+          initialPins: initialPinsStanding, 
+          shotNumber: widget.globalShotNumber,
+        ),
+      ),
+    );
+
+    if (shotResult != null) {
+      _recordShot(shotResult);
+    }
+  }
+  
+  void _recordShot(Map<String, dynamic> shotResult) {
+    final List<bool> pinsStandingResult = shotResult['pinsStanding'] as List<bool>; 
+    final int pinsDownCount = shotResult['pinsDownCount'] as int;
+    final String? outcome = shotResult['outcome'] as String?;
+    final bool isFoul = shotResult['isFoul'] as bool;
+    
+    final newPinsDown = pinsStandingResult.map((isStanding) => !isStanding).toList(); 
+
+    setState(() {
+      pinsDown = newPinsDown; 
+      position = outcome;
+    });
+
+    _sessionController.recordShot(
+      lane: lane,
+      speed: speed,
+      hitBoard: board,
+      ball: ball, 
+      pinsStanding: pinsStandingResult, 
+      pinsDownCount: pinsDownCount,
+      position: outcome ?? pinsDownCount.toString(),
+      isFoul: isFoul,
+    );
+  }
+
+  Widget _buildPinDisplay(List<bool> pinsDownList) { // pinsDownList here corresponds to the state `pinsDown`
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [7, 8, 9, 10].map((p) => _buildPin(p, pinsDownList)).toList(),
+        ),
+        const SizedBox(height: 3),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [4, 5, 6].map((p) => _buildPin(p, pinsDownList)).toList(),
+        ),
+        const SizedBox(height: 3),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [2, 3].map((p) => _buildPin(p, pinsDownList)).toList(),
+        ),
+        const SizedBox(height: 3),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [_buildPin(1, pinsDownList)],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPin(int pinNumber, List<bool> pinsDownList) {
+    final index = pinNumber - 1;
+    final isDown = pinsDownList[index]; 
+    return Container(
+      width: 18,
+      height: 18,
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: isDown ? const Color.fromRGBO(153, 153, 153, 1) : const Color.fromRGBO(142, 124, 195, 1),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.black, width: 0.5),
+      ),
+    );
+  }
+
+  Widget _buildInfoBar(int lane, int board, double speed, int ball) {
+    const double height = 50; 
+    return Container(
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color.fromRGBO(153, 153, 153, 1),
+        border: Border.all(color: Colors.black, width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildInfoCell('Lane', lane.toString()),
+          _buildDivider(),
+          _buildInfoCell('Board', board.toString()),
+          _buildDivider(),
+          _buildInfoCell('Speed', speed.toStringAsFixed(1)),
+          _buildDivider(),
+          _buildInfoCell('Ball', '1'), 
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildDivider() {
+    return Container(
+      width: 1,
+      height: 24,
+      color: Colors.black.withOpacity(0.4),
+      margin: const EdgeInsets.symmetric(horizontal: 3),
+    );
+  }
+
+  Widget _buildInfoCell(String label, String value) {
+    return Container(
+      width: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: Colors.black, fontSize: 10),
+          ),
+          Text(
+            value,
+            style: const TextStyle(color: Colors.black, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final displayFrameNumber = frameIndex + 1;
+    final displayFrameNumber = widget.frameIndex + 1;
 
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+      backgroundColor: widget.color, // 🎯 MODIFIED: Use widget.color for Scaffold background too
       extendBodyBehindAppBar: true,
       body: Center(
         child: GestureDetector(
-          onTap: showPages,
+          onTap: _openShotPage, 
           child: Container(
             width: 280,
             height: 280,
             decoration: BoxDecoration(
-              color: color, 
+              color: widget.color, // This will now also be the unified dark grey
               shape: BoxShape.circle,
             ),
             child: Column(
@@ -545,7 +505,7 @@ class BowlingShot extends StatelessWidget {
               children: [
                 const SizedBox(height: 24),
                 Text(
-                  'Frame $displayFrameNumber — Shot $shotIndex',
+                  'Frame $displayFrameNumber — Shot ${widget.shotIndex}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -553,17 +513,17 @@ class BowlingShot extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Display the pins STANDING using the passed function
-                buildPinDisplay(pinsStanding),
+                _buildPinDisplay(pinsDown),
                 const SizedBox(height: 6),
 
-                // Info Bar (Data Section - Tap to edit)
-                Transform.scale(
-                  scale: 0.8,
-                  child: buildInfoBar(lane, board, speed, ball), 
+                GestureDetector(
+                  onTap: _openOtherPage, 
+                  child: Transform.scale(
+                    scale: 0.8,
+                    child: _buildInfoBar(lane, board, speed, ball), 
+                  ),
                 ),
                 
-                // Simple display of last recorded outcome
                 if (position != null) 
                   Text(
                     'Last Shot: $position',
