@@ -1,12 +1,15 @@
 import '../models/session.dart';
 
 class LocalCache {
-  
+  int id = 0;
+  String sessionId = "";
+  String payload = "";
+  bool sent = false;
+  DateTime timestamp = DateTime.now();
 
-
+  void queueSession(GameSession session) {}
+  void markAsSent() {}
   void saveSession(GameSession session) {}
-  GameSession? loadLastSession() => null;
-  List<GameSession> loadAllUnsent() => [];
-  void markAllSent() {}
+  GameSession loadSession() => GameSession();
   void clearCache() {}
 }

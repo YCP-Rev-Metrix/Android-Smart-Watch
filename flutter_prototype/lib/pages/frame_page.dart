@@ -392,14 +392,33 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
                         ],
                       ),
                       alignment: Alignment.center,
-                      child: Text(
-                        'Frame ${i + 1}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      child: Builder(builder: (context) {
+                        final session = SessionManager();
+                        final score = session.getFrameScore(i);
+
+                        return Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Frame ${i + 1}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Score: $score',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        );
+                      }),
+
                     ),
                   ),
                 ),
