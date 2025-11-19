@@ -10,6 +10,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_reactive_ble: ^5.2.0
+  permission_handler: ^11.4.0
+  flutter_blue_plus: ^1.16.2
+  get: ^4.6.5
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -18,13 +22,15 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints
   # to encourage good coding practices.
-  flutter_lints: ^6.0.0
+  flutter_lints: ^5.0.0
 
-  # Added tools for icons & splash
-  flutter_launcher_icons: ^0.14.4
+  # 👇 Added tools for icons & splash
+  flutter_launcher_icons: ^0.13.1
   flutter_native_splash: ^2.4.0
 
 flutter:
@@ -34,13 +40,13 @@ flutter:
   assets:
     - assets/RevMetrix_Logo.png
 
-# Launcher icon configuration
+# 👇 Launcher icon configuration
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/RevMetrix_Logo.png"
 
-# Splash screen configuration
+# 👇 Splash screen configuration
 flutter_native_splash:
   color: "#434343"
   image: "assets/RevMetrix_Logo.png"
