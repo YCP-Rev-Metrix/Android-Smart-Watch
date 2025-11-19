@@ -226,12 +226,12 @@ class _BowlingFrameState extends State<BowlingFrame> {
     final activeGame = _sessionController.currentSession!.games.first;
     final frame = activeGame.frames[widget.frameIndex];
     
-    // 🎯 FIX: Declare pageCount as a mutable 'int' variable.
+    // Declare pageCount as a mutable 'int' variable.
     int pageCount; 
     
     if (frame.isComplete || !widget.isInputActive) {
-        // If the frame is done, or if we are only viewing a past (potentially incomplete) frame, 
-        // show only the recorded shots.
+        // If the frame is done, or if we are viewing a past frame, 
+        // show only the recorded shots (enables editing previous completed shots).
         pageCount = frame.shots.length;
     } else {
         // If it's the active frame for input, show recorded shots + 1 empty shot screen.
@@ -247,12 +247,12 @@ class _BowlingFrameState extends State<BowlingFrame> {
     if (pageCount == 0 && widget.isInputActive) {
       pageCount = 1;
     } else if (pageCount == 0 && !widget.isInputActive) {
-      // If we are viewing a past frame that was never started (shouldn't happen in a proper game flow 
-      // but as a fallback), show 1 page to avoid a 0-count PageView.
+      // If we are viewing a past frame that was never started, show 1 page.
       pageCount = 1; 
     }
 
 
+    // Allow scrolling on all pages to enable reviewing/editing past shots.
     final scrollPhysics = widget.isInputActive && !frame.isComplete
       ? const NeverScrollableScrollPhysics() 
       : const BouncingScrollPhysics();
@@ -260,7 +260,7 @@ class _BowlingFrameState extends State<BowlingFrame> {
     return PageView.builder(
       controller: _controller,
       physics: scrollPhysics,
-      itemCount: pageCount, // 👈 Use the dynamic count here
+      itemCount: pageCount, // Use the dynamic count here
       itemBuilder: (context, shotIndex) {
         
         // Calculate the starting global shot number for this PageView
@@ -279,7 +279,10 @@ class _BowlingFrameState extends State<BowlingFrame> {
           shotIndex: shotIndex + 1,
           globalShotNumber: initialGlobalShot + shotIndex, 
           // isInputActive is only true if we are on the current active frame AND the input page
+          // This flag controls the visual appearance and whether recording/saving occurs.
           isInputActive: widget.isInputActive && isInputPage,
+          // Flag if ANY editing should be allowed (true for all recorded shots + the current input page).
+          isEditable: widget.isInputActive || shotIndex < frame.shots.length,
         );
       },
     );
@@ -435,6 +438,7 @@ class BowlingShot extends StatefulWidget {
   final int globalShotNumber;
   final Color color; 
   final bool isInputActive; // Flag if this specific shot is ready for input
+  final bool isEditable; // Flag if this shot can be tapped to edit (true for all recorded shots)
 
   const BowlingShot({
     super.key,
@@ -443,6 +447,7 @@ class BowlingShot extends StatefulWidget {
     required this.globalShotNumber,
     required this.color,
     required this.isInputActive, 
+    required this.isEditable, 
   });
 
   @override
@@ -486,6 +491,7 @@ class _BowlingShotState extends State<BowlingShot> {
     setState(() {
       if (shotToDisplay != null) {
         // Use shot data
+        // PinsDown is true for pins that are DOWN (opposite of the model's 'pinsState')
         pinsDown = shotToDisplay.pinsState.map((isStanding) => !isStanding).toList();
         lane = frame.lane;
         board = shotToDisplay.hitBoard;
@@ -506,8 +512,8 @@ class _BowlingShotState extends State<BowlingShot> {
 
 
   void _openOtherPage() async {
-    // Only allow editing lane/board/speed if this is the currently active shot
-    if (!widget.isInputActive) return;
+    // Allow opening for ALL shots where 'isEditable' is true (which includes past shots).
+    if (!widget.isEditable) return; 
     
     final updatedInfo = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -527,20 +533,37 @@ class _BowlingShotState extends State<BowlingShot> {
         board = updatedInfo['board'] as int;
         speed = updatedInfo['speed'] as double;
       });
+      
+      // If a shot was edited, and it was a *recorded* shot (not the current input page), 
+      // we need to call editShot to update the metadata in the model.
+      if (!widget.isInputActive) {
+        _editShot(isMetadataOnly: true);
+      }
     }
   }
 
   void _openShotPage() async {
-    // Only allow recording if this is the currently active shot
-    if (!widget.isInputActive) return;
+    // Allow opening for ALL shots where 'isEditable' is true.
+    if (!widget.isEditable) return;
 
     final activeGame = _sessionController.currentSession!.games.first;
 
-    // Logic to set initial pins based on whether it's shot 1 or a subsequent shot
-    final initialPinsStanding = widget.shotIndex == 1
-        ? List.filled(10, true) // Reset for Shot 1
-        // For shot 2/3, use the pins left from the previous shot in the frame
-        : activeGame.frames[widget.frameIndex].shots.last.pinsState; 
+    // Determine the pins standing before this specific shot was taken.
+    final List<bool> initialPinsStanding;
+    if (widget.shotIndex == 1) {
+        // Shot 1 always starts with all pins standing
+        initialPinsStanding = List.filled(10, true); 
+    } else {
+        // For shot 2/3, find the pins left from the *previous* shot in the frame.
+        final previousShotIndex = widget.shotIndex - 2;
+        if (activeGame.frames[widget.frameIndex].shots.length > previousShotIndex && previousShotIndex >= 0) {
+            initialPinsStanding = activeGame.frames[widget.frameIndex].shots[previousShotIndex].pinsState;
+        } else {
+            // Fallback
+            initialPinsStanding = List.filled(10, true);
+        }
+    }
+
 
     final shotResult = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -553,12 +576,19 @@ class _BowlingShotState extends State<BowlingShot> {
     );
 
     if (shotResult != null) {
-      _recordShot(shotResult);
+        // If we are editing a past shot, we need a special controller method.
+        if (widget.isInputActive) {
+            _recordShot(shotResult);
+        } else {
+            // Logic to re-record/edit a past shot (pins/count change).
+            _editShot(shotResult: shotResult);
+        }
     }
   }
   
   void _recordShot(Map<String, dynamic> shotResult) {
-    final List<bool> pinsStandingResult = shotResult['pinsStanding'] as List<bool>; 
+    // 🎯 FIX: Changed key from 'pinsStanding' to 'standingPins'
+    final List<bool> standingPinsResult = shotResult['pinsStanding'] as List<bool>; 
     final int pinsDownCount = shotResult['pinsDownCount'] as int;
     final String? outcome = shotResult['outcome'] as String?;
     final bool isFoul = shotResult['isFoul'] as bool;
@@ -568,11 +598,53 @@ class _BowlingShotState extends State<BowlingShot> {
       speed: speed,
       hitBoard: board,
       ball: ball, 
-      pinsStanding: pinsStandingResult, 
+      // 🎯 FIX: Changed parameter name to standingPins
+      standingPins: standingPinsResult, 
       pinsDownCount: pinsDownCount,
       position: outcome ?? pinsDownCount.toString(),
       isFoul: isFoul,
     );
+  }
+  
+  // Method to edit a recorded shot, used for both pin data and metadata changes.
+  void _editShot({Map<String, dynamic>? shotResult, bool isMetadataOnly = false}) {
+    
+    // 🎯 FIX: Changed key from 'pinsStanding' to 'standingPins'
+    final List<bool> standingPinsResult = isMetadataOnly 
+        ? pinsDown.map((isDown) => !isDown).toList() // Use current pinsDown state (converted to standing)
+        : shotResult!['pinsStanding'] as List<bool>; 
+        
+    final int pinsDownCount = isMetadataOnly
+        ? _sessionController.currentSession!.games.first.frames[widget.frameIndex].shots[widget.shotIndex - 1].count
+        : shotResult!['pinsDownCount'] as int;
+        
+    final String? outcome = isMetadataOnly
+        ? position // Keep current position
+        : shotResult!['outcome'] as String?;
+        
+    final bool isFoul = isMetadataOnly
+        ? _sessionController.currentSession!.games.first.frames[widget.frameIndex].shots[widget.shotIndex - 1].isFoul
+        : shotResult!['isFoul'] as bool;
+
+    // This is the index of the shot *within the current frame* (0-based)
+    final shotIndexInFrame = widget.shotIndex - 1; 
+
+    _sessionController.editShot(
+      frameIndex: widget.frameIndex,
+      shotIndexInFrame: shotIndexInFrame,
+      lane: lane,
+      speed: speed,
+      hitBoard: board,
+      ball: ball, 
+      // 🎯 FIX: Changed parameter name to standingPins
+      standingPins: standingPinsResult, 
+      pinsDownCount: pinsDownCount,
+      position: outcome ?? pinsDownCount.toString(),
+      isFoul: isFoul,
+    );
+    
+    // After editing, the display state must be updated locally.
+    _updateShotDisplay();
   }
 
   Widget _buildPinDisplay(List<bool> pinsDownList) {
@@ -679,8 +751,8 @@ class _BowlingShotState extends State<BowlingShot> {
       extendBodyBehindAppBar: true,
       body: Center(
         child: GestureDetector(
-          // Tapping only opens the shot page if it's the active input shot
-          onTap: widget.isInputActive ? _openShotPage : null, 
+          // Tapping opens shot page if it's editable.
+          onTap: widget.isEditable ? _openShotPage : null, 
           child: Container(
             width: 280,
             height: 280,
@@ -705,8 +777,8 @@ class _BowlingShotState extends State<BowlingShot> {
                 const SizedBox(height: 6),
 
                 GestureDetector(
-                  // Tapping info bar only opens OtherPage if it's the active input shot
-                  onTap: widget.isInputActive ? _openOtherPage : null, 
+                  // Tapping info bar opens OtherPage if it's editable.
+                  onTap: widget.isEditable ? _openOtherPage : null, 
                   child: Transform.scale(
                     scale: 0.8,
                     child: _buildInfoBar(lane, board, speed, ball), 
