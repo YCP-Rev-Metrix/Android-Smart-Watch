@@ -1,96 +1,220 @@
 // lib/controllers/session_controller.dart
 
 import 'package:flutter/foundation.dart';
+import '../models/frame.dart'; 
+import '../models/shot.dart'; 
 
 // ----------------------------------------------------------------------
-// 1. Core Model Structure (Reflecting required schema and list-driven logic)
+// 1. Core Model Structure 
 // ----------------------------------------------------------------------
-class SessionModel {
-  final String sessionId;
-  final int numOfGames; // Derived from the games list length
-  final List<String> balls; // Array of ball names/ids
-  final List<Game> games; // The definitive source of truth
-  
-  // The constructor accepts the final list of games, which is the source of truth.
-  SessionModel({
-    required this.games,
-  })  : sessionId = 'SESSION_${DateTime.now().millisecondsSinceEpoch}',
-        balls = const ['Ball A', 'Ball B', 'Ball C'], // Hardcoded test balls
-        // CRITICAL: numOfGames is calculated from the list length to guarantee sync.
-        numOfGames = games.length; 
-}
 
 class Game {
-  final int numOfFrames;
+  final int gameNumber;
   final List<Frame> frames;
   final int totalScore; 
+
+  Game({required this.gameNumber, required this.frames, required this.totalScore});
+
+  static Game createEmpty(int gameNumber, int totalScore) {
+    return Game(
+      gameNumber: gameNumber,
+      frames: List.generate(10, (i) => Frame(frameNumber: i + 1, lane: 1)),
+      totalScore: totalScore,
+    );
+  }
   
-  Game({required this.numOfFrames, required this.totalScore})
-      : frames = List.generate(numOfFrames, (frameIndex) => Frame(score: 10));
+  Game copyWithFrame({required int index, required Frame newFrame}) {
+    final updatedFrames = List<Frame>.from(frames);
+    if (index >= 0 && index < updatedFrames.length) {
+      updatedFrames[index] = newFrame;
+    }
+    return Game(
+      gameNumber: gameNumber,
+      frames: updatedFrames,
+      totalScore: totalScore, 
+    );
+  }
 }
 
-class Frame {
-  dynamic shot;
-  final int score; 
+class SessionModel {
+  final String sessionId;
+  final List<String> balls;
+  final List<Game> games; 
+  int get numOfGames => games.length;
   
-  Frame({required this.score});
+  SessionModel({
+    required this.games,
+  }) : sessionId = 'SESSION_${DateTime.now().millisecondsSinceEpoch}',
+       balls = const ['Ball A', 'Ball B', 'Ball C'];
 }
-// ----------------------------------------------------------------------
 
+
+// #############################################################
+//                         2. SESSION CONTROLLER 
+// #############################################################
 
 class SessionController extends ChangeNotifier { 
   
   // --- Singleton Pattern ---
   static final SessionController _instance = SessionController._internal();
   
-  // Initialize with hardcoded test data (5 games) when the controller is first accessed.
   factory SessionController() {
-      if (_instance.currentSession == null) {
-          _instance._initializeHardcodedSession();
-      }
-      return _instance;
+    if (_instance.currentSession == null) {
+      _instance._initializeHardcodedSession();
+    }
+    return _instance;
   }
   SessionController._internal();
 
   SessionModel? currentSession; 
   
   // --- Initialization & Setup ---
+  
+  Shot _createTestShot({
+    required int shotNumber, 
+    required int count, 
+    required List<bool> standingPins, 
+    bool isFoul = false,
+    String position = 'Pocket',
+  }) {
+    final leaveType = Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul);
+    return Shot(
+      shotNumber: shotNumber,
+      ball: 1, // Default to Ball 1
+      count: count,
+      leaveType: leaveType,
+      timestamp: DateTime.now().add(Duration(seconds: shotNumber)),
+      position: position,
+      speed: 15.5 + (shotNumber % 3) * 0.1,
+      hitBoard: 12 + (shotNumber % 5),
+    );
+  }
 
-  // Utility to create the test array of games (simulates parsing a packet)
-  List<Game> _createTestGames(int count) {
+  void _initializeTestData() {
+    int globalShotCount = 1;
+    final List<Frame> detailedFrames = [];
+
+    // --- Frame 1 (Index 0): Strike (X) - Cumulative Score: 30 ---
+    final shot1 = _createTestShot(
+      shotNumber: globalShotCount++,
+      count: 10,
+      standingPins: List.filled(10, false),
+      position: 'Strike',
+    );
+    detailedFrames.add(Frame(
+      frameNumber: 1, 
+      lane: 1, 
+      shots: [shot1]
+    ));
+
+    // --- Frame 2 (Index 1): 7 Spare (7 /) - Cumulative Score: 50 ---
+    final shot2 = _createTestShot(
+      shotNumber: globalShotCount++,
+      count: 7,
+      standingPins: [false, false, false, false, false, false, false, true, true, true],
+      position: '7 Pin',
+    );
+    final shot3 = _createTestShot(
+      shotNumber: globalShotCount++,
+      count: 3, 
+      standingPins: List.filled(10, false),
+      position: 'Spare',
+    );
+    detailedFrames.add(Frame(
+      frameNumber: 2, 
+      lane: 1, 
+      shots: [shot2, shot3]
+    ));
+
+    // --- Frame 3 (Index 2): Open Frame (8, 1) - Cumulative Score: 59 ---
+    final shot4 = _createTestShot(
+      shotNumber: globalShotCount++,
+      count: 8,
+      standingPins: [false, true, false, false, false, false, false, false, false, false],
+      position: 'Pocket',
+    );
+    final shot5 = _createTestShot(
+      shotNumber: globalShotCount++,
+      count: 1, 
+      standingPins: [false, true, false, false, false, false, false, false, false, false],
+      position: 'Tap',
+    );
+    detailedFrames.add(Frame(
+      frameNumber: 3, 
+      lane: 1, 
+      shots: [shot4, shot5]
+    ));
+
+    // --- Frame 4 (Index 3): Active Frame (Empty, waiting for input) ---
+    detailedFrames.add(Frame(
+      frameNumber: 4, 
+      lane: 1, 
+      shots: const [] 
+    ));
+
+
+    // 3. Pad the rest of the game with empty frames up to 10
+    int currentFrameCount = detailedFrames.length;
+    final emptyFrames = List.generate(10 - currentFrameCount, (index) => Frame(
+      frameNumber: index + currentFrameCount + 1,
+      lane: 1, 
+      shots: const [],
+    ));
+
+    // 4. Create the Game object
+    final testGame = Game(
+      gameNumber: 1,
+      frames: [...detailedFrames, ...emptyFrames],
+      totalScore: 59, 
+    );
+    
+    // 5. Create the full test session
+    final simpleGames = _createSimpleTestGames(6); 
+    currentSession = SessionModel(
+      games: [testGame, ...simpleGames], 
+    );
+  }
+  
+  List<Game> _createSimpleTestGames(int count) {
     return List.generate(count, (gameIndex) {
-      // Hardcoded test scores for UI verification
       final int testScore = switch (gameIndex) {
-        0 => 120, // Game 1
-        1 => 80,  // Game 2
-        2 => 55,  // Game 3
-        3 => 90,  // Game 4
-        4 => 85,  // Game 5
+        0 => 120, 
+        1 => 80, 
+        2 => 55, 
+        3 => 90, 
+        4 => 85, 
         _ => 0,
       };
-      return Game(numOfFrames: 10, totalScore: testScore);
+      
+      return Game.createEmpty(gameIndex + 2, testScore);
     });
   }
 
   void _initializeHardcodedSession() {
-      // Create and pass the list of 5 games
-      final testGames = _createTestGames(7);
-      currentSession = SessionModel(games: testGames); 
+    _initializeTestData(); 
   }
   
   // --- Controller Methods ---
 
-  // Method simulating reception and parsing of a Bluetooth packet
+  /// Finds the index of the first frame in the active game that is NOT complete.
+  int get activeFrameIndex {
+    final activeGame = currentSession?.games.first;
+    if (activeGame == null) return 0;
+    
+    final index = activeGame.frames.indexWhere((f) => !f.isComplete);
+    
+    // If all frames are complete, return the last frame index (9, for the 10th frame)
+    return index == -1 ? activeGame.frames.length - 1 : index;
+  }
+  
   void createNewSessionFromPacket(List<Game> parsedGames) {
-      // The SessionModel constructor handles deriving numOfGames from parsedGames.length
-      currentSession = SessionModel(games: parsedGames);
-      notifyListeners(); 
+    currentSession = SessionModel(games: parsedGames);
+    notifyListeners(); 
   }
 
-  // Legacy method signature maintained for existing calls
   void createNewSession({int numOfGames = 3}) {
-      final newGames = _createTestGames(numOfGames);
-      createNewSessionFromPacket(newGames);
+    final newGames = _createSimpleTestGames(numOfGames);
+    createNewSessionFromPacket(newGames);
   }
 
   void recordShot({
@@ -103,17 +227,48 @@ class SessionController extends ChangeNotifier {
     required String position,
     required bool isFoul,
   }) {
-    // Logic to update state
+    // 1. Find the active Game and Frame
+    final activeGame = currentSession?.games.first; 
+    final activeFrameIndex = activeGame?.frames.indexWhere((f) => !f.isComplete) ?? -1;
+
+    if (activeGame != null && activeFrameIndex != -1) {
+      final oldFrame = activeGame.frames[activeFrameIndex];
+      
+      final globalShotNumber = activeGame.frames.fold<int>(0, (sum, f) => sum + f.shots.length) + 1;
+
+      // 2. Create the new Shot object
+      final newShot = Shot(
+        shotNumber: globalShotNumber,
+        ball: ball, 
+        count: pinsDownCount,
+        // Using 'standingPins' to match Shot.buildLeaveType signature
+        leaveType: Shot.buildLeaveType(standingPins: pinsStanding, isFoul: isFoul), 
+        timestamp: DateTime.now(),
+        position: position,
+        speed: speed,
+        hitBoard: hitBoard,
+      );
+
+      // 3. Create the new Frame (immutable update)
+      final newFrame = oldFrame.copyWithShot(newShot);
+      
+      // 4. Create the new Game (immutable update)
+      final newGame = activeGame.copyWithFrame(index: activeFrameIndex, newFrame: newFrame);
+      
+      // 5. Update the session
+      currentSession = SessionModel(
+        games: [newGame, ...currentSession!.games.skip(1)],
+      );
+    }
+    
     notifyListeners();
   }
   
-  // CRITICAL: The UI/GameShell reads the array length directly for dynamic updates.
   int get numOfGames {
     return currentSession?.games.length ?? 1;
   }
 
   void setActiveGame(int gameIndex) {
-      // Logic to track the currently active game
-      notifyListeners(); 
+    notifyListeners(); 
   }
 }

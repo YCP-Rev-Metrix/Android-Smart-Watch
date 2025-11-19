@@ -2,10 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'game_page.dart'; // To navigate to GameShell
-import 'shot_page.dart'; // To navigate to the pin selection page
-import 'other_page.dart'; // To navigate to the lane/board/speed settings page
+import 'game_page.dart'; 
+import 'shot_page.dart'; 
+import 'other_page.dart'; 
 import '../controllers/session_controller.dart'; 
+import '../models/frame.dart'; 
+import '../models/shot.dart';
 
 // Global access to the controller
 final SessionController _sessionController = SessionController(); 
@@ -23,16 +25,38 @@ class FrameShell extends StatefulWidget {
 }
 
 class _FrameShellState extends State<FrameShell> {
-  int _activeFrameIndex = 0; // 0-based index (0=Frame 1)
+  // State to track which frame the user is currently viewing.
+  late int _viewFrameIndex;
+  
   bool _frameSelectMode = false;
 
-  // 🎯 MODIFIED: All frameColors are now the same dark grey for a unified background
-  final List<Color> frameColors = const [
+  // Define a small, fixed list of repeating colors
+  final List<Color> frameColorPalette = const [
     Color.fromRGBO(67, 67, 67, 1),
     Color.fromRGBO(67, 67, 67, 1),
     Color.fromRGBO(67, 67, 67, 1),
   ];
   
+  // Dynamic getter for the current frame index the user MUST input data into.
+  int get _currentActiveFrameIndex => _sessionController.activeFrameIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    // 1. Initialize view to the active input frame.
+    _viewFrameIndex = _currentActiveFrameIndex;
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // When dependencies change, ensure the view is snapped to the active frame 
+    // only if the user hasn't explicitly selected a past frame via the overlay.
+    if (_viewFrameIndex == _currentActiveFrameIndex) {
+        _viewFrameIndex = _currentActiveFrameIndex;
+    }
+  }
+
   void _onVerticalSwipe(DragEndDetails details) {
     if (details.primaryVelocity == null) return;
 
@@ -51,48 +75,78 @@ class _FrameShellState extends State<FrameShell> {
   }
 
   void _exitFrameSelection() {
-    setState(() => _frameSelectMode = false);
+    // 2. When exiting selection mode, explicitly reset the view back to the active input frame.
+    setState(() {
+      _viewFrameIndex = _currentActiveFrameIndex;
+      _frameSelectMode = false;
+    });
   }
 
   void _selectFrame(int index) {
     HapticFeedback.lightImpact();
+    // 3. User selection sets the view index and exits selection mode.
     setState(() {
-      _activeFrameIndex = index;
+      _viewFrameIndex = index; 
       _frameSelectMode = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentShotNumber = (_sessionController.currentSession?.games
-            .expand((g) => g.frames)
-            .where((f) => f.shot != null)
-            .length ?? 0) + 1;
-            
-    return WillPopScope(
-      onWillPop: () async => _frameSelectMode,
-      child: GestureDetector(
-        onLongPress: _enterFrameSelection,
-        onVerticalDragEnd: _onVerticalSwipe, 
-        behavior: HitTestBehavior.opaque,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            BowlingFrame(
-              color: frameColors[_activeFrameIndex % frameColors.length], 
-              frameIndex: _activeFrameIndex, 
-              shotNumber: currentShotNumber,
+    return ListenableBuilder(
+      listenable: _sessionController,
+      builder: (context, child) {
+        // Recalculate the active input index (0-based)
+        final inputFrameIndex = _currentActiveFrameIndex; 
+        
+        // --- CRITICAL FIX: Boundary Check ---
+        final gameFrames = _sessionController.currentSession!.games.first.frames;
+        final maxValidIndex = gameFrames.length - 1;
+
+        // Ensure _viewFrameIndex is within bounds (0 to maxValidIndex)
+        if (_viewFrameIndex < 0 || _viewFrameIndex > maxValidIndex) {
+          // If it's out of bounds, reset it to the currently active input frame.
+          _viewFrameIndex = inputFrameIndex.clamp(0, maxValidIndex).toInt();
+        }
+        // --- End Boundary Check ---
+
+        // Calculate the total number of shots taken up to the start of the view frame.
+        final shotsBeforeViewFrame = gameFrames
+            .take(_viewFrameIndex)
+            .fold(0, (sum, f) => sum + f.shots.length);
+        
+        // The global shot number of the *next* potential shot in the view frame
+        final currentGlobalShotNumber = shotsBeforeViewFrame + (gameFrames[_viewFrameIndex].shots.length) + 1;
+        
+        return WillPopScope(
+          onWillPop: () async => _frameSelectMode,
+          child: GestureDetector(
+            onLongPress: _enterFrameSelection,
+            onVerticalDragEnd: _onVerticalSwipe, 
+            behavior: HitTestBehavior.opaque,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                BowlingFrame(
+                  frameIndex: _viewFrameIndex, 
+                  // Use modulo operator to assign the color dynamically
+                  color: frameColorPalette[_viewFrameIndex % frameColorPalette.length], 
+                  shotNumber: currentGlobalShotNumber, 
+                  isInputActive: _viewFrameIndex == inputFrameIndex,
+                ),
+                if (_frameSelectMode)
+                  FrameSelectionOverlay(
+                    maxSelectableFrame: inputFrameIndex, 
+                    activeFrame: _viewFrameIndex, 
+                    colors: frameColorPalette, 
+                    onSelect: _selectFrame,
+                    onCancel: _exitFrameSelection,
+                  ),
+              ],
             ),
-            if (_frameSelectMode)
-              FrameSelectionOverlay(
-                activeFrame: _activeFrameIndex,
-                colors: frameColors, 
-                onSelect: _selectFrame,
-                onCancel: _exitFrameSelection,
-              ),
-          ],
-        ),
-      ),
+          ),
+        );
+      }
     );
   }
 }
@@ -103,14 +157,16 @@ class _FrameShellState extends State<FrameShell> {
 
 class BowlingFrame extends StatefulWidget {
   final Color color;
-  final int frameIndex; // 0-based index
-  final int shotNumber; // Global sequential shot number
+  final int frameIndex; 
+  final int shotNumber; 
+  final bool isInputActive; // Flag if this frame is where input should happen
 
   const BowlingFrame({
     super.key,
     required this.color,
     required this.frameIndex,
     required this.shotNumber,
+    required this.isInputActive, 
   });
 
   @override
@@ -118,12 +174,42 @@ class BowlingFrame extends StatefulWidget {
 }
 
 class _BowlingFrameState extends State<BowlingFrame> {
-  final PageController _controller = PageController();
+  late PageController _controller; 
+  
+  // Determine the shot index (0 or 1) that needs input
+  int _getActiveShotIndex(Frame frame) {
+    return frame.shots.length; // 0 for shot 1, 1 for shot 2, etc.
+  }
   
   @override
   void initState() {
     super.initState();
+    _initializeController();
+  }
+  
+  void _initializeController() {
+    final activeGame = _sessionController.currentSession!.games.first;
+    final frame = activeGame.frames[widget.frameIndex];
+    // This correctly determines the page for the shot being viewed/inputted.
+    final initialPage = _getActiveShotIndex(frame); 
+    
+    _controller = PageController(initialPage: initialPage);
     _controller.addListener(_onPageScroll);
+  }
+
+  @override
+  void didUpdateWidget(covariant BowlingFrame oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.frameIndex != widget.frameIndex) {
+      // Dispose of the old controller
+      _controller.dispose();
+      
+      // Initialize the new controller, setting the correct initialPage
+      _initializeController();
+      
+      // 🎯 FIX: Removed WidgetsBinding.instance.addPostFrameCallback logic.
+      // The new controller is initialized with the correct page and will handle it.
+    }
   }
 
   @override
@@ -134,42 +220,67 @@ class _BowlingFrameState extends State<BowlingFrame> {
   }
 
   void _onPageScroll() {
-    // No specific action needed here for background color change
+    // No specific action needed here
   }
 
   @override
   Widget build(BuildContext context) {
-    return PageView(
+    final activeGame = _sessionController.currentSession!.games.first;
+    final frame = activeGame.frames[widget.frameIndex];
+    final activeShotIndex = _getActiveShotIndex(frame); // 0 or 1
+
+    // Only restrict scrolling if it's the active input frame AND incomplete.
+    final scrollPhysics = widget.isInputActive && !frame.isComplete
+      ? const NeverScrollableScrollPhysics() 
+      : const BouncingScrollPhysics();
+
+    return PageView.builder(
       controller: _controller,
-      physics: const BouncingScrollPhysics(),
-      children: [
-        // Shot 1 (Page 0)
-        BowlingShot(
-          key: ValueKey('${widget.frameIndex}-1'), 
-          color: widget.color, // This will now be the unified dark grey
+      physics: scrollPhysics,
+      itemCount: 3, // Allow 3 pages (for the 10th frame)
+      itemBuilder: (context, shotIndex) {
+        
+        // Calculate the starting global shot number for this PageView
+        final shotsBeforeFrame = activeGame.frames
+            .take(widget.frameIndex)
+            .fold(0, (sum, f) => sum + f.shots.length);
+        final initialGlobalShot = shotsBeforeFrame + 1;
+        
+        // Logic to determine visibility:
+        final bool isVisible;
+        if (widget.isInputActive) {
+            // If active input, show the shot being input (activeShotIndex)
+            isVisible = shotIndex == activeShotIndex;
+        } else {
+            // If viewing past frame, only show shots that have been recorded
+            isVisible = shotIndex < frame.shots.length;
+        }
+        
+        if (!isVisible) {
+          return Container(color: widget.color);
+        }
+        
+        return BowlingShot(
+          key: ValueKey('${widget.frameIndex}-${shotIndex + 1}'), 
+          color: widget.color, 
           frameIndex: widget.frameIndex,
-          shotIndex: 1, 
-          globalShotNumber: widget.shotNumber,
-        ),
-        // Shot 2 (Page 1)
-        BowlingShot(
-          key: ValueKey('${widget.frameIndex}-2'),
-          color: widget.color, // 🎯 MODIFIED: Removed .withOpacity to match
-          frameIndex: widget.frameIndex,
-          shotIndex: 2, 
-          globalShotNumber: widget.shotNumber,
-        ),
-      ],
+          shotIndex: shotIndex + 1,
+          globalShotNumber: initialGlobalShot + shotIndex, 
+          // Pass the input status down to BowlingShot
+          isInputActive: widget.isInputActive && (shotIndex == activeShotIndex),
+        );
+      },
     );
   }
 }
 
 // #############################################################
-//                         3. FRAME SELECTION OVERLAY (Unchanged for logic, but colors will reflect change)
+//                         3. FRAME SELECTION OVERLAY 
 // #############################################################
 
 class FrameSelectionOverlay extends StatefulWidget {
-  final int activeFrame;
+  final int activeFrame; // The frame currently selected/viewed
+  final int maxSelectableFrame; // The index of the furthest frame (current input frame)
   final List<Color> colors;
   final ValueChanged<int> onSelect;
   final VoidCallback onCancel;
@@ -177,6 +288,7 @@ class FrameSelectionOverlay extends StatefulWidget {
   const FrameSelectionOverlay({
     super.key,
     required this.activeFrame,
+    required this.maxSelectableFrame, 
     required this.colors,
     required this.onSelect,
     required this.onCancel,
@@ -245,9 +357,20 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
             controller: _controller,
             onPageChanged: _onPageChanged,
             physics: const BouncingScrollPhysics(),
-            itemCount: widget.colors.length,
+            // CRITICAL: Restrict the number of pages displayed (up to the current active frame)
+            itemCount: widget.maxSelectableFrame + 1, 
             itemBuilder: (context, i) {
               final active = i == _selected;
+              
+              final isComplete = _sessionController.currentSession!.games.first.frames[i].isComplete;
+              
+              // FIX: Use modulo operator to cycle through colors dynamically
+              final int colorIndex = i % widget.colors.length;
+              
+              final Color frameColor = isComplete 
+                ? widget.colors[colorIndex] 
+                : widget.colors[colorIndex].withOpacity(0.5);
+              
               return Center(
                 child: AnimatedScale(
                   scale: active ? 1.0 : 0.85,
@@ -259,7 +382,7 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
                       width: circleSize,
                       height: circleSize,
                       decoration: BoxDecoration(
-                        color: widget.colors[i], // This will now be the unified dark grey
+                        color: frameColor, 
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
@@ -289,15 +412,17 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
   }
 }
 
+
 // #############################################################
-//                         4. BOWLING SHOT (Unified Background)
+//                         4. BOWLING SHOT (Data Display)
 // #############################################################
 
 class BowlingShot extends StatefulWidget {
   final int frameIndex; // 0-based
   final int shotIndex; // 1-based (1 or 2)
   final int globalShotNumber;
-  final Color color; // This will now always be the unified dark grey
+  final Color color; 
+  final bool isInputActive; // Flag if this specific shot is ready for input
 
   const BowlingShot({
     super.key,
@@ -305,6 +430,7 @@ class BowlingShot extends StatefulWidget {
     required this.shotIndex,
     required this.globalShotNumber,
     required this.color,
+    required this.isInputActive, 
   });
 
   @override
@@ -312,18 +438,65 @@ class BowlingShot extends StatefulWidget {
 }
 
 class _BowlingShotState extends State<BowlingShot> {
-  List<bool> pinsDown = List.filled(10, false); 
+  
   int lane = 1;
   int board = 18;
   double speed = 15.0;
   int ball = 1;
   String? position;
+  List<bool> pinsDown = List.filled(10, false); 
   
-  List<bool> _getPinsStandingForDisplay() {
-    return pinsDown.map((isDown) => !isDown).toList(); 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateShotDisplay();
+  }
+  
+  @override
+  void didUpdateWidget(covariant BowlingShot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Important: Re-read the data if the frame/shot context changes
+    if (oldWidget.frameIndex != widget.frameIndex || oldWidget.shotIndex != widget.shotIndex) {
+      _updateShotDisplay();
+    }
   }
 
+  // Reads the current/previous shot data from the controller models
+  void _updateShotDisplay() {
+    final activeGame = _sessionController.currentSession!.games.first;
+    final frame = activeGame.frames[widget.frameIndex];
+    
+    // Determine which shot data to display (if any)
+    final shotToDisplay = frame.shots.length >= widget.shotIndex
+        ? frame.shots[widget.shotIndex - 1] // Use the recorded shot
+        : null; // Use current defaults/placeholders
+        
+    setState(() {
+      if (shotToDisplay != null) {
+        // Use shot data
+        pinsDown = shotToDisplay.pinsState.map((isStanding) => !isStanding).toList();
+        lane = frame.lane;
+        board = shotToDisplay.hitBoard;
+        speed = shotToDisplay.speed;
+        ball = shotToDisplay.ball;
+        position = shotToDisplay.position;
+      } else {
+        // Use default/placeholder data for the upcoming shot
+        pinsDown = List.filled(10, false); 
+        lane = 1;
+        board = 18;
+        speed = 15.0;
+        ball = 1;
+        position = null;
+      }
+    });
+  }
+
+
   void _openOtherPage() async {
+    // Only allow editing lane/board/speed if this is the currently active shot
+    if (!widget.isInputActive) return;
+    
     final updatedInfo = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
@@ -346,7 +519,16 @@ class _BowlingShotState extends State<BowlingShot> {
   }
 
   void _openShotPage() async {
-    final initialPinsStanding = _getPinsStandingForDisplay();
+    // Only allow recording if this is the currently active shot
+    if (!widget.isInputActive) return;
+
+    final activeGame = _sessionController.currentSession!.games.first;
+
+    // Logic to set initial pins based on whether it's shot 1 or a subsequent shot
+    final initialPinsStanding = widget.shotIndex == 1
+        ? List.filled(10, true) // Reset for Shot 1
+        // For shot 2/3, use the pins left from the previous shot in the frame
+        : activeGame.frames[widget.frameIndex].shots.last.pinsState; 
 
     final shotResult = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -369,13 +551,6 @@ class _BowlingShotState extends State<BowlingShot> {
     final String? outcome = shotResult['outcome'] as String?;
     final bool isFoul = shotResult['isFoul'] as bool;
     
-    final newPinsDown = pinsStandingResult.map((isStanding) => !isStanding).toList(); 
-
-    setState(() {
-      pinsDown = newPinsDown; 
-      position = outcome;
-    });
-
     _sessionController.recordShot(
       lane: lane,
       speed: speed,
@@ -388,7 +563,7 @@ class _BowlingShotState extends State<BowlingShot> {
     );
   }
 
-  Widget _buildPinDisplay(List<bool> pinsDownList) { // pinsDownList here corresponds to the state `pinsDown`
+  Widget _buildPinDisplay(List<bool> pinsDownList) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -488,16 +663,17 @@ class _BowlingShotState extends State<BowlingShot> {
     final displayFrameNumber = widget.frameIndex + 1;
 
     return Scaffold(
-      backgroundColor: widget.color, // 🎯 MODIFIED: Use widget.color for Scaffold background too
+      backgroundColor: widget.color,
       extendBodyBehindAppBar: true,
       body: Center(
         child: GestureDetector(
-          onTap: _openShotPage, 
+          // Tapping only opens the shot page if it's the active input shot
+          onTap: widget.isInputActive ? _openShotPage : null, 
           child: Container(
             width: 280,
             height: 280,
             decoration: BoxDecoration(
-              color: widget.color, // This will now also be the unified dark grey
+              color: widget.color,
               shape: BoxShape.circle,
             ),
             child: Column(
@@ -517,7 +693,8 @@ class _BowlingShotState extends State<BowlingShot> {
                 const SizedBox(height: 6),
 
                 GestureDetector(
-                  onTap: _openOtherPage, 
+                  // Tapping info bar only opens OtherPage if it's the active input shot
+                  onTap: widget.isInputActive ? _openOtherPage : null, 
                   child: Transform.scale(
                     scale: 0.8,
                     child: _buildInfoBar(lane, board, speed, ball), 

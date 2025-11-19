@@ -1,4 +1,5 @@
-// models/game.dart
+// models/game.dart (MODIFIED)
+
 import 'frame.dart';
 
 class Game {
@@ -28,10 +29,13 @@ class Game {
     );
   }
 
+  // 🎯 MODIFIED: Finds the first frame where the 'shots' list is empty.
   Frame? get currentFrame =>
-      frames.firstWhere((f) => f.shot == null, orElse: () => frames.last);
+      frames.firstWhere((f) => f.shots.isEmpty, orElse: () => frames.last);
 
-  bool get isComplete => frames.every((f) => f.shot != null);
+  // 🎯 MODIFIED: The game is complete if ALL frames are marked as 'isComplete'
+  // (which correctly checks for strikes/spares/2 shots in the Frame model).
+  bool get isComplete => frames.every((f) => f.isComplete);
 
   Map<String, dynamic> toJson() => {
     'gameNumber': gameNumber,
