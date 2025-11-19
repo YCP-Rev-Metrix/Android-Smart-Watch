@@ -45,12 +45,12 @@ class SessionModel {
   SessionModel({
     required this.games,
   }) : sessionId = 'SESSION_${DateTime.now().millisecondsSinceEpoch}',
-       balls = const ['Ball A', 'Ball B', 'Ball C'];
+    balls = const ['Ball A', 'Ball B', 'Ball C'];
 }
 
 
 // #############################################################
-//                         2. SESSION CONTROLLER 
+//                         2. SESSION CONTROLLER 
 // #############################################################
 
 class SessionController extends ChangeNotifier { 
@@ -77,6 +77,7 @@ class SessionController extends ChangeNotifier {
     bool isFoul = false,
     String position = 'Pocket',
   }) {
+    // Correct parameter name: standingPins
     final leaveType = Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul);
     return Shot(
       shotNumber: shotNumber,
@@ -222,7 +223,8 @@ class SessionController extends ChangeNotifier {
     required double speed,
     required int hitBoard,
     required int ball,
-    required List<bool> pinsStanding,
+    // Corrected parameter name
+    required List<bool> standingPins, 
     required int pinsDownCount,
     required String position,
     required bool isFoul,
@@ -241,8 +243,8 @@ class SessionController extends ChangeNotifier {
         shotNumber: globalShotNumber,
         ball: ball, 
         count: pinsDownCount,
-        // Using 'standingPins' to match Shot.buildLeaveType signature
-        leaveType: Shot.buildLeaveType(standingPins: pinsStanding, isFoul: isFoul), 
+        // Corrected parameter name
+        leaveType: Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul), 
         timestamp: DateTime.now(),
         position: position,
         speed: speed,
@@ -259,6 +261,68 @@ class SessionController extends ChangeNotifier {
       currentSession = SessionModel(
         games: [newGame, ...currentSession!.games.skip(1)],
       );
+    }
+    
+    notifyListeners();
+  }
+  
+  /// Edits an existing shot in a frame by replacing the Shot object at a specific index.
+  void editShot({
+    required int frameIndex,
+    required int shotIndexInFrame, // 0-based index of the shot within the frame
+    required int lane,
+    required double speed,
+    required int hitBoard,
+    required int ball,
+    // Corrected parameter name
+    required List<bool> standingPins,
+    required int pinsDownCount,
+    required String position,
+    required bool isFoul,
+  }) {
+    final activeGame = currentSession?.games.first;
+
+    if (activeGame != null && frameIndex >= 0 && frameIndex < activeGame.frames.length) {
+      final oldFrame = activeGame.frames[frameIndex];
+      final oldShots = oldFrame.shots;
+
+      if (shotIndexInFrame >= 0 && shotIndexInFrame < oldShots.length) {
+        final oldShot = oldShots[shotIndexInFrame];
+        
+        // 1. Create the new Shot object, maintaining the original shotNumber and timestamp
+        final updatedShot = Shot(
+          shotNumber: oldShot.shotNumber,
+          ball: ball, 
+          count: pinsDownCount,
+          // Corrected parameter name
+          leaveType: Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul), 
+          timestamp: oldShot.timestamp, // Keep the original timestamp
+          position: position,
+          speed: speed,
+          hitBoard: hitBoard,
+        );
+
+        // 2. Create the new list of shots with the updated shot
+        final newShots = List<Shot>.from(oldShots);
+        newShots[shotIndexInFrame] = updatedShot;
+
+        // 3. Create the new Frame (immutable update)
+        final newFrame = Frame(
+            frameNumber: oldFrame.frameNumber, 
+            lane: lane, 
+            shots: newShots
+        );
+        
+        // 4. Create the new Game (immutable update)
+        final newGame = activeGame.copyWithFrame(index: frameIndex, newFrame: newFrame);
+        
+        // 5. Update the session
+        currentSession = SessionModel(
+          games: [newGame, ...currentSession!.games.skip(1)],
+        );
+        
+        // NOTE: In a complete application, you must call a recalculateScores() method here.
+      }
     }
     
     notifyListeners();
