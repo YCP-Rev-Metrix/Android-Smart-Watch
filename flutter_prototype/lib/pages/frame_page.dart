@@ -7,7 +7,6 @@ import 'shot_page.dart';
 import 'other_page.dart'; 
 import '../controllers/session_controller.dart'; 
 import '../models/frame.dart'; 
-import '../models/shot.dart';
 
 // Global access to the controller
 final SessionController _sessionController = SessionController(); 
@@ -207,8 +206,7 @@ class _BowlingFrameState extends State<BowlingFrame> {
       // Initialize the new controller, setting the correct initialPage
       _initializeController();
       
-      // 🎯 FIX: Removed WidgetsBinding.instance.addPostFrameCallback logic.
-      // The new controller is initialized with the correct page and will handle it.
+      // The Pages are now dynamically sized, so no post-frame jump is necessary.
     }
   }
 
@@ -227,9 +225,34 @@ class _BowlingFrameState extends State<BowlingFrame> {
   Widget build(BuildContext context) {
     final activeGame = _sessionController.currentSession!.games.first;
     final frame = activeGame.frames[widget.frameIndex];
-    final activeShotIndex = _getActiveShotIndex(frame); // 0 or 1
+    
+    // 🎯 FIX: Declare pageCount as a mutable 'int' variable.
+    int pageCount; 
+    
+    if (frame.isComplete || !widget.isInputActive) {
+        // If the frame is done, or if we are only viewing a past (potentially incomplete) frame, 
+        // show only the recorded shots.
+        pageCount = frame.shots.length;
+    } else {
+        // If it's the active frame for input, show recorded shots + 1 empty shot screen.
+        pageCount = frame.shots.length + 1;
+    }
+    
+    // Safety check for the 10th frame (Index 9), ensuring we don't exceed 3 pages.
+    if (widget.frameIndex == 9 && pageCount > 3) {
+      pageCount = 3; 
+    }
+    
+    // If the frame hasn't been started (0 shots), ensure there's 1 page if input is active.
+    if (pageCount == 0 && widget.isInputActive) {
+      pageCount = 1;
+    } else if (pageCount == 0 && !widget.isInputActive) {
+      // If we are viewing a past frame that was never started (shouldn't happen in a proper game flow 
+      // but as a fallback), show 1 page to avoid a 0-count PageView.
+      pageCount = 1; 
+    }
 
-    // Only restrict scrolling if it's the active input frame AND incomplete.
+
     final scrollPhysics = widget.isInputActive && !frame.isComplete
       ? const NeverScrollableScrollPhysics() 
       : const BouncingScrollPhysics();
@@ -237,7 +260,7 @@ class _BowlingFrameState extends State<BowlingFrame> {
     return PageView.builder(
       controller: _controller,
       physics: scrollPhysics,
-      itemCount: 3, // Allow 3 pages (for the 10th frame)
+      itemCount: pageCount, // 👈 Use the dynamic count here
       itemBuilder: (context, shotIndex) {
         
         // Calculate the starting global shot number for this PageView
@@ -246,19 +269,8 @@ class _BowlingFrameState extends State<BowlingFrame> {
             .fold(0, (sum, f) => sum + f.shots.length);
         final initialGlobalShot = shotsBeforeFrame + 1;
         
-        // Logic to determine visibility:
-        final bool isVisible;
-        if (widget.isInputActive) {
-            // If active input, show the shot being input (activeShotIndex)
-            isVisible = shotIndex == activeShotIndex;
-        } else {
-            // If viewing past frame, only show shots that have been recorded
-            isVisible = shotIndex < frame.shots.length;
-        }
-        
-        if (!isVisible) {
-          return Container(color: widget.color);
-        }
+        // Determine if this is the input page (index matches number of recorded shots)
+        final bool isInputPage = shotIndex == frame.shots.length;
         
         return BowlingShot(
           key: ValueKey('${widget.frameIndex}-${shotIndex + 1}'), 
@@ -266,8 +278,8 @@ class _BowlingFrameState extends State<BowlingFrame> {
           frameIndex: widget.frameIndex,
           shotIndex: shotIndex + 1,
           globalShotNumber: initialGlobalShot + shotIndex, 
-          // Pass the input status down to BowlingShot
-          isInputActive: widget.isInputActive && (shotIndex == activeShotIndex),
+          // isInputActive is only true if we are on the current active frame AND the input page
+          isInputActive: widget.isInputActive && isInputPage,
         );
       },
     );
