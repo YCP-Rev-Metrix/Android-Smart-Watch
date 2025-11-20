@@ -1,4 +1,4 @@
-import '../models/game_session.dart';
+import '../models/session.dart';
 
 class LocalCache {
   

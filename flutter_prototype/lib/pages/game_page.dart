@@ -1,7 +1,18 @@
+// lib/pages/game_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'frame_page.dart';
-import 'dev_settings_page.dart';
+import 'frame_page.dart'; 
+import 'dev_settings_page.dart'; 
+import '../controllers/session_controller.dart'; 
+
+// Global access to the controller 
+final SessionController _sessionController = SessionController(); 
+
+
+// #############################################################
+//                          1. GAME SHELL (The Main Page)
+// #############################################################
 
 class GameShell extends StatefulWidget {
   const GameShell({super.key});
@@ -18,7 +29,36 @@ class _GameShellState extends State<GameShell> {
     Colors.grey.shade900,
     Colors.grey.shade800,
     Colors.grey.shade700,
+    Colors.grey.shade600, 
+    Colors.grey.shade500,
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _sessionController.addListener(_onSessionChange);
+    _updateActiveGameSafety();
+  }
+
+  @override
+  void dispose() {
+    _sessionController.removeListener(_onSessionChange);
+    super.dispose();
+  }
+
+  void _onSessionChange() {
+    setState(() {
+      _updateActiveGameSafety();
+    });
+  }
+
+  void _updateActiveGameSafety() {
+    final int gameCount = _sessionController.numOfGames;
+    if (_activeGame >= gameCount) {
+        _activeGame = gameCount - 1;
+        if (_activeGame < 0) _activeGame = 0;
+    }
+  }
 
   void _enterGameSelection() {
     HapticFeedback.selectionClick();
@@ -34,27 +74,36 @@ class _GameShellState extends State<GameShell> {
     setState(() {
       _activeGame = index;
       _gameSelectMode = false;
+      _sessionController.setActiveGame(_activeGame);
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final int gameCount = _sessionController.numOfGames;
+    
+    _updateActiveGameSafety();
+
     return WillPopScope(
-      onWillPop: () async => _gameSelectMode,
+      onWillPop: () async => _gameSelectMode, 
       child: GestureDetector(
-        onLongPress: _enterGameSelection,
+        onLongPress: _enterGameSelection, 
         behavior: HitTestBehavior.opaque,
         child: Stack(
           fit: StackFit.expand,
           children: [
+            // ORIGINAL BowlingGame UI
             BowlingGame(
-              color: gameColors[_activeGame],
+              color: gameColors[_activeGame % gameColors.length], 
               index: _activeGame,
+              gameCount: gameCount,
             ),
+            
             if (_gameSelectMode)
               GameSelectionOverlay(
                 activeGame: _activeGame,
                 colors: gameColors,
+                gameCount: gameCount, 
                 onSelect: _selectGame,
                 onCancel: _exitGameSelection,
               ),
@@ -65,35 +114,64 @@ class _GameShellState extends State<GameShell> {
   }
 }
 
+
+// #############################################################
+//                          2. BOWLING GAME (Adding Dynamic Controls)
+// #############################################################
+
 class BowlingGame extends StatefulWidget {
   final Color color;
   final int index;
-  const BowlingGame({super.key, required this.color, required this.index});
+  final int gameCount;
+  const BowlingGame({
+    super.key, 
+    required this.color, 
+    required this.index, 
+    required this.gameCount,
+  });
 
   @override
   State<BowlingGame> createState() => _BowlingGameState();
 }
 
 class _BowlingGameState extends State<BowlingGame> {
+  
   void _onVerticalSwipe(DragEndDetails details) {
     if (details.primaryVelocity == null) return;
 
-    // Swipe down → go to FrameShell
-    if (details.primaryVelocity! > 200) {
+    // Swipe UP (negative velocity) → Go to FrameShell (Score entry screen)
+    if (details.primaryVelocity! < -200) {
       HapticFeedback.mediumImpact();
-      Navigator.push(
+      Navigator.push( 
         context,
         MaterialPageRoute(builder: (_) => const FrameShell()),
       );
     }
 
-    // Swipe up → go back (pop to previous screen)
-    else if (details.primaryVelocity! < -200) {
+    // Swipe DOWN (positive velocity) → go back (pop to previous screen, e.g., Session Start)
+    else if (details.primaryVelocity! > 200) {
       HapticFeedback.mediumImpact();
-      Navigator.pop(context);
+      Navigator.pop(context); 
     }
   }
 
+  void _addGame() {
+    int currentCount = _sessionController.numOfGames;
+    if (currentCount < 10) { 
+      _sessionController.createNewSession(numOfGames: currentCount + 1);
+    }
+    HapticFeedback.lightImpact();
+  }
+
+  void _removeGame() {
+    int currentCount = _sessionController.numOfGames;
+    if (currentCount > 1) { 
+      _sessionController.createNewSession(numOfGames: currentCount - 1);
+    }
+    HapticFeedback.lightImpact();
+  }
+
+  // 🎯 NEW: Method to navigate to Dev Settings
   void _openSettings() {
     Navigator.push(
       context,
@@ -103,6 +181,15 @@ class _BowlingGameState extends State<BowlingGame> {
 
   @override
   Widget build(BuildContext context) {
+    // Access the specific game data for the active game's score
+    // CRITICAL: Ensure we safely access the games list using the index
+    final Game? currentGame = (_sessionController.currentSession?.games.length ?? 0) > widget.index
+        ? _sessionController.currentSession!.games[widget.index]
+        : null;
+
+    final String displayScore = currentGame?.totalScore.toString() ?? '---';
+    final int currentCount = widget.gameCount; 
+    
     return GestureDetector(
       onVerticalDragEnd: _onVerticalSwipe,
       behavior: HitTestBehavior.opaque,
@@ -120,7 +207,7 @@ class _BowlingGameState extends State<BowlingGame> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'Game ${widget.index + 1}',
+                  'Game ${widget.index + 1} of $currentCount', 
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -128,21 +215,38 @@ class _BowlingGameState extends State<BowlingGame> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Score: 000',
-                  style: TextStyle(
+                Text(
+                  'Score: $displayScore',
+                  style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 24),
-                GestureDetector(
-                  onTap: _openSettings,
-                  child: const Icon(
-                    Icons.settings,
-                    color: Colors.white70,
-                    size: 28,
-                  ),
+                
+                // 🎯 CRITICAL: Dynamic test controls AND Settings button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                      onPressed: _removeGame,
+                      tooltip: 'Remove Game',
+                    ),
+                    const SizedBox(width: 10),
+                    // Settings Button
+                    IconButton(
+                      icon: const Icon(Icons.settings, color: Colors.white70),
+                      onPressed: _openSettings, // Calls the navigation method
+                      tooltip: 'Dev Settings',
+                    ),
+                    const SizedBox(width: 10),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                      onPressed: _addGame,
+                      tooltip: 'Add Game',
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -153,9 +257,16 @@ class _BowlingGameState extends State<BowlingGame> {
   }
 }
 
+
+// #############################################################
+//                          3. GAME SELECTION OVERLAY (Remains Unchanged)
+// #############################################################
+
 class GameSelectionOverlay extends StatefulWidget {
+  // ... (content remains unchanged)
   final int activeGame;
-  final List<Color> colors;
+  final int gameCount; 
+  final List<Color> colors; 
   final ValueChanged<int> onSelect;
   final VoidCallback onCancel;
 
@@ -163,6 +274,7 @@ class GameSelectionOverlay extends StatefulWidget {
     super.key,
     required this.activeGame,
     required this.colors,
+    required this.gameCount, 
     required this.onSelect,
     required this.onCancel,
   });
@@ -172,6 +284,7 @@ class GameSelectionOverlay extends StatefulWidget {
 }
 
 class _GameSelectionOverlayState extends State<GameSelectionOverlay> {
+  // ... (content remains unchanged)
   late final PageController _controller;
   late int _selected;
   bool _isSettling = false;
@@ -181,7 +294,7 @@ class _GameSelectionOverlayState extends State<GameSelectionOverlay> {
     super.initState();
     _selected = widget.activeGame;
     _controller = PageController(
-      initialPage: _selected,
+      initialPage: _selected.clamp(0, widget.gameCount > 0 ? widget.gameCount - 1 : 0).toInt(), 
       viewportFraction: 0.8,
     );
 
@@ -194,13 +307,34 @@ class _GameSelectionOverlayState extends State<GameSelectionOverlay> {
       }
     });
   }
+  
+  @override
+  void didUpdateWidget(covariant GameSelectionOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.gameCount != oldWidget.gameCount) {
+      if (_selected >= widget.gameCount) {
+        int newIndex = widget.gameCount - 1;
+        if (newIndex < 0) newIndex = 0;
+        _controller.jumpToPage(newIndex);
+        _selected = newIndex;
+      }
+    }
+  }
+
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
 
   void _onPageChanged(int i) {
     setState(() => _selected = i);
     HapticFeedback.selectionClick();
   }
 
-  void _onTapGame(int i) {
+  void _onTapGame(int i) { 
     if (_isSettling) return;
     widget.onSelect(i);
   }
@@ -208,7 +342,7 @@ class _GameSelectionOverlayState extends State<GameSelectionOverlay> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final circleSize = size.width * 0.65;
+    final circleSize = size.width * 0.65; 
 
     return AnimatedOpacity(
       opacity: 1,
@@ -223,7 +357,7 @@ class _GameSelectionOverlayState extends State<GameSelectionOverlay> {
             controller: _controller,
             onPageChanged: _onPageChanged,
             physics: const BouncingScrollPhysics(),
-            itemCount: widget.colors.length,
+            itemCount: widget.gameCount, 
             itemBuilder: (context, i) {
               final active = i == _selected;
               return Center(
@@ -232,12 +366,12 @@ class _GameSelectionOverlayState extends State<GameSelectionOverlay> {
                   duration: const Duration(milliseconds: 150),
                   curve: Curves.easeOutCubic,
                   child: GestureDetector(
-                    onTap: () => _onTapGame(i),
+                    onTap: () => _onTapGame(i), 
                     child: Container(
                       width: circleSize,
                       height: circleSize,
                       decoration: BoxDecoration(
-                        color: widget.colors[i],
+                        color: widget.colors[i % widget.colors.length], 
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
@@ -248,7 +382,7 @@ class _GameSelectionOverlayState extends State<GameSelectionOverlay> {
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        'Game ${i + 1}',
+                        'Game ${i + 1}', 
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
