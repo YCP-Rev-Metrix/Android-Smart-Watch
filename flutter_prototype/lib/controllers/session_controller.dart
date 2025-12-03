@@ -67,6 +67,12 @@ class SessionController extends ChangeNotifier {
   SessionController._internal();
 
   SessionModel? currentSession; 
+  // Global defaults for pre-shot dropdowns / picker. These persist across shots
+  // until the user changes them by selecting new values in the pre-shot UI.
+  int defaultLane = 1;
+  int defaultBoard = 18;
+  int defaultBall = 1;
+  double defaultSpeed = 15.0;
   
   // --- Initialization & Setup ---
   
@@ -252,7 +258,13 @@ class SessionController extends ChangeNotifier {
       );
 
       // 3. Create the new Frame (immutable update)
-      final newFrame = oldFrame.copyWithShot(newShot);
+      // Ensure we preserve/update the lane for the frame so subsequent shots
+      // default to the last-used lane.
+      final newFrame = Frame(
+        frameNumber: oldFrame.frameNumber,
+        lane: lane,
+        shots: [...oldFrame.shots, newShot],
+      );
       
       // 4. Create the new Game (immutable update)
       final newGame = activeGame.copyWithFrame(index: activeFrameIndex, newFrame: newFrame);
@@ -263,6 +275,12 @@ class SessionController extends ChangeNotifier {
       );
     }
     
+    // Persist the user's last selections as global defaults for subsequent shots
+    defaultLane = lane;
+    defaultSpeed = speed;
+    defaultBoard = hitBoard;
+    defaultBall = ball;
+
     notifyListeners();
   }
   

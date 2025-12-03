@@ -4,12 +4,29 @@ import 'dart:math' as math;
 
 
 class ShotPage extends StatefulWidget {
- // initialPins: List<bool> where true = pin is STANDING before this shot
- final List<bool> initialPins;
- final int shotNumber;
+  // initialPins: List<bool> where true = pin is STANDING before this shot
+  final List<bool> initialPins;
+  final int shotNumber;
+  // shotIndex within the frame (1-based). This determines whether the strike/spare
+  // button is an 'X' (first shot) or '/' (second shot).
+  final int frameShotIndex;
+  // Allow caller to specify initial dropdown/picker values so selections
+  // persist across shots when provided by the caller.
+  final int? initialBoard;
+  final int? initialLane;
+  final int? initialBall;
+  final double? initialSpeed;
 
-
- const ShotPage({super.key, required this.initialPins, required this.shotNumber});
+  const ShotPage({
+    super.key,
+    required this.initialPins,
+    required this.shotNumber,
+    required this.frameShotIndex,
+    this.initialBoard,
+    this.initialLane,
+    this.initialBall,
+    this.initialSpeed,
+  });
 
 
  @override
@@ -31,9 +48,9 @@ class _ShotPageState extends State<ShotPage> {
  // Pre-shot controls
  double _sliderPos = 21; // slider value 1..40, start so stance maps to 20
  int get _stance => 41 - _sliderPos.round(); // maps so left shows 40, right shows 1
- int _selectedBoard = 1;
- int _selectedLane = 1;
- int _selectedBall = 1;
+  int _selectedBoard = 1;
+  int _selectedLane = 1;
+  int _selectedBall = 1;
  bool _isRecording = false;
 
 
@@ -46,6 +63,11 @@ class _ShotPageState extends State<ShotPage> {
    super.initState();
    // Copy the initial pins standing (up) into the mutable state
    currentPinsState = List.from(widget.initialPins);
+    // Initialize the dropdowns/picker from passed-in initial values when provided
+    if (widget.initialBoard != null) _selectedBoard = widget.initialBoard!;
+    if (widget.initialLane != null) _selectedLane = widget.initialLane!;
+    if (widget.initialBall != null) _selectedBall = widget.initialBall!;
+    if (widget.initialSpeed != null) _ballSpeed = widget.initialSpeed!;
  }
 
 
@@ -66,8 +88,8 @@ class _ShotPageState extends State<ShotPage> {
            mainAxisAlignment: MainAxisAlignment.start,
            crossAxisAlignment: CrossAxisAlignment.center,
            children: [
-             Text(
-               'Shot ${widget.shotNumber}',
+            Text(
+                       'Shot ${widget.frameShotIndex}',
                style: TextStyle(
                  color: Colors.white,
                  fontSize: 17 * uiScale,
@@ -160,7 +182,12 @@ class _ShotPageState extends State<ShotPage> {
 
  void _nextPhase() {
    setState(() {
-     _phase = Phase.post;
+  // Default to the frame-relative symbol: first shot shows 'X', second shows '/'
+  // when entering post-phase, so the user sees the appropriate symbol by default.
+  selectedOutcome = widget.frameShotIndex == 1 ? 'X' : '/';
+  isFoul = false;
+
+  _phase = Phase.post;
    });
  }
 
@@ -466,20 +493,24 @@ class _ShotPageState extends State<ShotPage> {
 
 
  Widget _buildStrikeOrSpareButton({double scale = 1.0}) {
-   final String compact = widget.shotNumber == 1 ? 'X' : '/';
+  final String compact = widget.frameShotIndex == 1 ? 'X' : '/';
    final double w = 64 * scale;
    final double h = 44 * scale;
    // Simple toggle button (no popup) for Strike/Spare — tapping toggles the outcome
-   return GestureDetector(
-     onTap: () => _selectOutcome(widget.shotNumber == 1 ? 'X' : '/'),
-     child: Container(
-       width: w,
-       height: h,
-       decoration: BoxDecoration(color: const Color.fromRGBO(153, 153, 153, 1), border: Border.all(color: Colors.black, width: 0.6 * scale)),
-       alignment: Alignment.center,
-       child: Text(compact, style: TextStyle(color: Colors.white, fontSize: 14 * scale, fontWeight: FontWeight.w700)),
-     ),
-   );
+  final bool isSelected = selectedOutcome == compact;
+  final Color bg = isSelected ? const Color.fromRGBO(80, 200, 120, 1) : const Color.fromRGBO(153, 153, 153, 1);
+  final Color textColor = isSelected ? Colors.black : Colors.white;
+
+  return GestureDetector(
+    onTap: () => _selectOutcome(compact),
+    child: Container(
+      width: w,
+      height: h,
+      decoration: BoxDecoration(color: bg, border: Border.all(color: Colors.black, width: 0.6 * scale)),
+      alignment: Alignment.center,
+      child: Text(compact, style: TextStyle(color: textColor, fontSize: 14 * scale, fontWeight: FontWeight.w700)),
+    ),
+  );
  }
 
 
