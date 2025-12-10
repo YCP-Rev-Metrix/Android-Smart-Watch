@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'game_page.dart'; 
 import 'shot_page.dart'; 
-import 'other_page.dart'; 
 import '../controllers/session_controller.dart'; 
 import '../models/frame.dart'; 
 
