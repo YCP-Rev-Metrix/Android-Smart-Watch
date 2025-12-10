@@ -7,7 +7,6 @@ import 'shot_page.dart';
 import 'other_page.dart'; 
 import '../controllers/session_controller.dart'; 
 import '../models/frame.dart'; 
-import '../models/shot.dart';
 
 // Global access to the controller
 final SessionController _sessionController = SessionController(); 
@@ -229,15 +228,26 @@ class _BowlingFrameState extends State<BowlingFrame> {
     final frame = activeGame.frames[widget.frameIndex];
     final activeShotIndex = _getActiveShotIndex(frame); // 0 or 1
 
+    final maxShotSlots = (widget.frameIndex == 9) ? 3 : 2;
+    int itemCount;
+    
+    if (widget.isInputActive) {
+      itemCount = maxShotSlots;
+    } else {
+      itemCount = frame.shots.length;
+      if (itemCount == 0) itemCount = 1;
+    }
+
+
     // Only restrict scrolling if it's the active input frame AND incomplete.
     final scrollPhysics = widget.isInputActive && !frame.isComplete
-      ? const NeverScrollableScrollPhysics() 
-      : const BouncingScrollPhysics();
+        ? const NeverScrollableScrollPhysics()
+        : const BouncingScrollPhysics();
 
     return PageView.builder(
       controller: _controller,
       physics: scrollPhysics,
-      itemCount: 3, // Allow 3 pages (for the 10th frame)
+      itemCount: itemCount,
       itemBuilder: (context, shotIndex) {
         
         // Calculate the starting global shot number for this PageView
@@ -249,7 +259,6 @@ class _BowlingFrameState extends State<BowlingFrame> {
         // Logic to determine visibility:
         final bool isVisible;
         if (widget.isInputActive) {
-            // If active input, show the shot being input (activeShotIndex)
             isVisible = shotIndex == activeShotIndex;
         } else {
             // If viewing past frame, only show shots that have been recorded
@@ -261,12 +270,11 @@ class _BowlingFrameState extends State<BowlingFrame> {
         }
         
         return BowlingShot(
-          key: ValueKey('${widget.frameIndex}-${shotIndex + 1}'), 
-          color: widget.color, 
+          key: ValueKey('${widget.frameIndex}-${shotIndex + 1}'),
+          color: widget.color,
           frameIndex: widget.frameIndex,
           shotIndex: shotIndex + 1,
-          globalShotNumber: initialGlobalShot + shotIndex, 
-          // Pass the input status down to BowlingShot
+          globalShotNumber: initialGlobalShot + shotIndex,
           isInputActive: widget.isInputActive && (shotIndex == activeShotIndex),
         );
       },
