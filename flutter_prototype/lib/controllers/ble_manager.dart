@@ -177,6 +177,16 @@ class BLEManager extends GetxController {
       print('Failed to start foreground service: $e');
     }
   }
+  Future<void> sendRecordingCommand(String cmd) async {
+  await sendJsonToPhone({"cmd": cmd});
+  }
+  Future<void> startRecording() async {
+    await sendRecordingCommand("startRec");
+  }
+
+  Future<void> stopRecording() async {
+    await sendRecordingCommand("stopRec");
+  }
 
 }
 
