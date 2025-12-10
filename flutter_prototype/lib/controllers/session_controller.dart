@@ -1,6 +1,7 @@
 // lib/controllers/session_controller.dart
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'; // Added for ChangeNotifier
 import '../models/frame.dart'; 
 import '../models/shot.dart'; 
 
@@ -67,6 +68,17 @@ class SessionController extends ChangeNotifier {
   SessionController._internal();
 
   SessionModel? currentSession; 
+  
+  // 🎯 NEW: State tracking for the *input location*
+  // _activeFrameIndex: 0-9 for the 10 main frames. Set to 10 for game over.
+  int _activeFrameIndex = 0; 
+  // _activeShotIndex: 1, 2, or 3 (for the 10th frame)
+  int _activeShotIndex = 1; 
+
+  // 🎯 NEW: Public getters to expose the active input location
+  int get activeFrameIndex => _activeFrameIndex; 
+  int get activeShotIndex => _activeShotIndex; 
+
   // Global defaults for pre-shot dropdowns / picker. These persist across shots
   // until the user changes them by selecting new values in the pre-shot UI.
   int defaultLane = 1;
@@ -180,6 +192,10 @@ class SessionController extends ChangeNotifier {
     currentSession = SessionModel(
       games: [testGame, ...simpleGames], 
     );
+    
+    // 🎯 NEW: Set active input position after initializing test data (Frame 4, Shot 1)
+    _activeFrameIndex = 3; 
+    _activeShotIndex = 1;
   }
   
   List<Game> _createSimpleTestGames(int count) {
@@ -203,19 +219,19 @@ class SessionController extends ChangeNotifier {
   
   // --- Controller Methods ---
 
-  /// Finds the index of the first frame in the active game that is NOT complete.
-  int get activeFrameIndex {
-    final activeGame = currentSession?.games.first;
-    if (activeGame == null) return 0;
-    
-    final index = activeGame.frames.indexWhere((f) => !f.isComplete);
-    
-    // If all frames are complete, return the last frame index (9, for the 10th frame)
-    return index == -1 ? activeGame.frames.length - 1 : index;
-  }
+  // 🎯 REMOVED: The old 'activeFrameIndex' getter is removed in favor of the state variables
   
+  // Helper to get the current frame being modified (index 0-9)
+  Frame? get _currentInputFrame {
+    final gameFrames = currentSession?.games.first.frames; // Always use the first game for input
+    if (gameFrames == null || _activeFrameIndex >= gameFrames.length) return null;
+    return gameFrames[_activeFrameIndex]; 
+  }
+
   void createNewSessionFromPacket(List<Game> parsedGames) {
     currentSession = SessionModel(games: parsedGames);
+    _activeFrameIndex = 0; // Reset
+    _activeShotIndex = 1; // Reset
     notifyListeners(); 
   }
 
@@ -237,44 +253,47 @@ class SessionController extends ChangeNotifier {
   }) {
     // 1. Find the active Game and Frame
     final activeGame = currentSession?.games.first; 
-    final activeFrameIndex = activeGame?.frames.indexWhere((f) => !f.isComplete) ?? -1;
+    // 🎯 NEW: Use the stored active index
+    final activeFrameIndexForUpdate = _activeFrameIndex;
 
-    if (activeGame != null && activeFrameIndex != -1) {
-      final oldFrame = activeGame.frames[activeFrameIndex];
-      
-      final globalShotNumber = activeGame.frames.fold<int>(0, (sum, f) => sum + f.shots.length) + 1;
+    // Check for game over state
+    if (activeGame == null || activeFrameIndexForUpdate >= 10) return;
 
-      // 2. Create the new Shot object
-      final newShot = Shot(
-        shotNumber: globalShotNumber,
-        ball: ball, 
-        count: pinsDownCount,
-        // Corrected parameter name
-        leaveType: Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul), 
-        timestamp: DateTime.now(),
-        position: position,
-        speed: speed,
-        hitBoard: hitBoard,
-      );
-
-      // 3. Create the new Frame (immutable update)
-      // Ensure we preserve/update the lane for the frame so subsequent shots
-      // default to the last-used lane.
-      final newFrame = Frame(
-        frameNumber: oldFrame.frameNumber,
-        lane: lane,
-        shots: [...oldFrame.shots, newShot],
-      );
-      
-      // 4. Create the new Game (immutable update)
-      final newGame = activeGame.copyWithFrame(index: activeFrameIndex, newFrame: newFrame);
-      
-      // 5. Update the session
-      currentSession = SessionModel(
-        games: [newGame, ...currentSession!.games.skip(1)],
-      );
-    }
+    final oldFrame = activeGame.frames[activeFrameIndexForUpdate];
     
+    final globalShotNumber = activeGame.frames.fold<int>(0, (sum, f) => sum + f.shots.length) + 1;
+
+    // 2. Create the new Shot object
+    final newShot = Shot(
+      shotNumber: globalShotNumber,
+      ball: ball, 
+      count: pinsDownCount,
+      // Corrected parameter name
+      leaveType: Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul), 
+      timestamp: DateTime.now(),
+      position: position,
+      speed: speed,
+      hitBoard: hitBoard,
+    );
+
+    // 3. Create the new Frame (immutable update)
+    final newFrame = Frame(
+        frameNumber: oldFrame.frameNumber,
+        lane: lane, 
+        shots: [...oldFrame.shots, newShot],
+    );
+    
+    // 4. Create the new Game (immutable update)
+    final newGame = activeGame.copyWithFrame(index: activeFrameIndexForUpdate, newFrame: newFrame);
+    
+    // 5. Update the session
+    currentSession = SessionModel(
+      games: [newGame, ...currentSession!.games.skip(1)],
+    );
+
+    // 🎯 NEW: ADVANCE FRAME/SHOT LOGIC
+    _advanceFrameAndShot(newFrame);
+
     // Persist the user's last selections as global defaults for subsequent shots
     defaultLane = lane;
     defaultSpeed = speed;
@@ -282,6 +301,46 @@ class SessionController extends ChangeNotifier {
     defaultBall = ball;
 
     notifyListeners();
+  }
+
+  // 🎯 NEW METHOD: Core logic to determine the next input location (Frame/Shot)
+  void _advanceFrameAndShot(Frame newFrame) {
+    final frameNumber = newFrame.frameNumber; // 1-10
+    final shotCount = newFrame.shots.length;
+    
+    // Logic for Frames 1 through 9 (index 0-8)
+    if (frameNumber < 10) {
+      if (newFrame.isComplete) {
+        // Frame is complete (Strike on shot 1, or two shots taken)
+        _activeFrameIndex++; // Move to next frame index
+        _activeShotIndex = 1; // Start at shot 1
+      } else {
+        // Not a strike on shot 1, move to shot 2 of the current frame
+        _activeShotIndex = 2; 
+      }
+    } 
+    // Logic for Frame 10 (index 9)
+    else if (frameNumber == 10) {
+      if (shotCount == 1) {
+        // First shot taken. Needs at least a second shot.
+        _activeShotIndex = 2;
+      } else if (shotCount == 2) {
+        // Check if a bonus shot is earned (Strike or Spare)
+        final totalPins = newFrame.totalPinsDown;
+        if (totalPins >= 10) {
+          // Strike or Spare, needs shot 3
+          _activeShotIndex = 3;
+        } else {
+          // Open frame (less than 10 pins in 2 shots), game is over
+          _activeFrameIndex = 10; // State indicating game over
+          _activeShotIndex = 1;
+        }
+      } else if (shotCount == 3) {
+        // Third shot complete, game is over
+        _activeFrameIndex = 10; // State indicating game over
+        _activeShotIndex = 1;
+      }
+    }
   }
   
   /// Edits an existing shot in a frame by replacing the Shot object at a specific index.
@@ -353,4 +412,7 @@ class SessionController extends ChangeNotifier {
   void setActiveGame(int gameIndex) {
     notifyListeners(); 
   }
+
+  
 }
+
