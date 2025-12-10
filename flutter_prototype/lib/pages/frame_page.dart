@@ -227,6 +227,22 @@ class _BowlingFrameState extends State<BowlingFrame> {
      // 🎯 FIX: Removed WidgetsBinding.instance.addPostFrameCallback logic.
      // The new controller is initialized with the correct page and will handle it.
    }
+    // If this frame becomes the active input frame (or remains active after a shot was recorded), ensure the PageView shows the active shot page.
+    // This handles the case where a shot was recorded and the active shot index advanced; jump the controller to the new active page.
+    if (widget.isInputActive) {
+      final activeGame = _sessionController.currentSession!.games.first;
+      final frame = activeGame.frames[widget.frameIndex];
+      final int activeShotIndex = frame.shots.length; // 0 for first shot, 1 for second, etc.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _controller.hasClients) {
+          try {
+            _controller.jumpToPage(activeShotIndex);
+          } catch (_) {
+            // ignore if jump fails during rebuild
+          }
+        }
+      });
+    }
  }
 
 
@@ -518,13 +534,26 @@ class _BowlingShotState extends State<BowlingShot> {
        ball = shotToDisplay.ball;
        position = shotToDisplay.position;
      } else {
-       // Use default/placeholder data for the upcoming shot
-       pinsDown = List.filled(10, false);
-       lane = 1;
-       board = 18;
-       speed = 15.0;
-       ball = 1;
-       position = null;
+      // For an upcoming shot, prefer to pre-fill values from the last
+      // recorded shot in this frame when available. If no prior shot
+      // exists, fall back to the user's global defaults stored in the
+      // SessionController so dropdown choices persist across shots/frames.
+      pinsDown = List.filled(10, false);
+      if (frame.shots.isNotEmpty) {
+        final lastShot = frame.shots.last;
+        lane = frame.lane; // frame.lane is updated when recording shots
+        board = lastShot.hitBoard;
+        speed = lastShot.speed;
+        ball = lastShot.ball;
+        position = null;
+      } else {
+        // Use controller-level defaults when this frame has no prior shots
+        lane = _sessionController.defaultLane;
+        board = _sessionController.defaultBoard;
+        speed = _sessionController.defaultSpeed;
+        ball = _sessionController.defaultBall;
+        position = null;
+      }
      }
    });
  }
@@ -556,6 +585,13 @@ class _BowlingShotState extends State<BowlingShot> {
        builder: (_) => ShotPage(
          initialPins: initialPinsStanding,
          shotNumber: widget.globalShotNumber,
+         // Pass current local selections so ShotPage dropdowns/picker are
+         // initialized to the user's last-used values for consistency.
+        frameShotIndex: widget.shotIndex,
+        initialLane: lane,
+         initialBoard: board,
+         initialBall: ball,
+         initialSpeed: speed,
        ),
      ),
    );
@@ -734,11 +770,7 @@ class _BowlingShotState extends State<BowlingShot> {
                  ),
                ),
               
-               if (position != null)
-                 Text(
-                   'Last Shot: $position',
-                   style: const TextStyle(color: Colors.white70, fontSize: 10),
-                 )
+               // Removed 'Last Shot' label per UX request.
              ],
            ),
          ),
