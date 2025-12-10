@@ -452,14 +452,15 @@ class _ShotPageState extends State<ShotPage> {
 
 Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
   Future<void> handleTap() async {
-    // Flip local UI state
-    setState(() => _isRecording = !_isRecording);
-
-    // 🔥 Send BLE command when recording starts
+    // If currently recording, stop and send command
     if (_isRecording) {
+      await BLEManager().sendRecordingCommand("stopRec");
+      setState(() => _isRecording = false);
+    } else {
+      // Start recording
+      setState(() => _isRecording = true);
       await BLEManager().sendRecordingCommand("startRec");
     }
-    // We do NOT send stop here — Next page handles that
   }
 
   if (round) {
