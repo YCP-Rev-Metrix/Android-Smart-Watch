@@ -56,15 +56,12 @@ class BLEPacketController extends GetxController {
     }
   }
   
-  /// Sends a single encoded packet via BLE notification.
-  /// 
-  /// Converts the packet to a 23-byte array and sends it through the
-  /// BLE notification characteristic.
+
+  /// Converts the packet to a 23-byte array and sends it through the BLE notification characteristic
   Future<void> _sendPacket(BLEPacket packet) async {
     final encoded = packet.encode();
     
     // Send the packet using BLE manager's public method
-    // We wrap the raw bytes in a JSON-compatible format for the native side
     await bleManager.sendRawBLEPacket(encoded);
   }
   

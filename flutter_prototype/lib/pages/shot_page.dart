@@ -5,23 +5,15 @@ import '../controllers/ble_manager.dart';
 
 
 class ShotPage extends StatefulWidget {
-  // initialPins: List<bool> where true = pin is STANDING before this shot
   final List<bool> initialPins;
   final int shotNumber;
-  // shotIndex within the frame (1-based). This determines whether the strike/spare
-  // button is an 'X' (first shot) or '/' (second shot).
   final int frameShotIndex;
-  // Allow caller to specify initial dropdown/picker values so selections
-  // persist across shots when provided by the caller.
   final int? initialBoard;
   final int? initialLane;
   final int? initialBall;
   final double? initialSpeed;
-  // If true, start the page in the post-shot editing phase so pins are editable immediately
   final bool startInPost;
-  // Optional initial outcome (e.g. 'X', '/', 'F') to pre-select the outcome button
   final String? initialOutcome;
-  // Optional initial foul flag
   final bool? initialIsFoul;
 
   const ShotPage({
@@ -56,8 +48,8 @@ class _ShotPageState extends State<ShotPage> {
 
 
  // Pre-shot controls
- double _sliderPos = 21; // slider value 1..40, start so stance maps to 20
- int get _stance => 41 - _sliderPos.round(); // maps so left shows 40, right shows 1
+ double _sliderPos = 21;
+ int get _stance => 41 - _sliderPos.round();
   int _selectedBoard = 1;
   int _selectedLane = 1;
   int _selectedBall = 1;
@@ -78,10 +70,6 @@ class _ShotPageState extends State<ShotPage> {
     if (widget.initialLane != null) _selectedLane = widget.initialLane!;
     if (widget.initialBall != null) _selectedBall = widget.initialBall!;
     if (widget.initialSpeed != null) _ballSpeed = widget.initialSpeed!;
-    // If caller provided initial post-shot data (editing an existing shot), prefill
-    // the outcome / foul / pins so the post-phase shows the correct state when the
-    // user navigates to it. IMPORTANT: do NOT force the UI into post-phase so users
-    // still see the pre-shot controls first and can access both phases.
     if (widget.startInPost) {
       // Pre-select outcome if provided (X, /, F)
       if (widget.initialOutcome != null) {
@@ -202,8 +190,7 @@ class _ShotPageState extends State<ShotPage> {
 
  void _togglePin(int index) {
    setState(() {
-     // Toggle the state of the pin (standing <-> down),
-     // but ONLY if the pin was standing before this shot.
+     // Toggle the state of the pin (standing <-> down) only if it was initially standing
      if (widget.initialPins[index]) {
        currentPinsState[index] = !currentPinsState[index];
      }
@@ -214,14 +201,12 @@ class _ShotPageState extends State<ShotPage> {
  void _nextPhase() async {
    // Stop recording if it's active
    if (_isRecording) {
-     // 🔥 Send BLE command to stop recording on phone
      await BLEManager().sendRecordingCommand("stopRec");
      setState(() => _isRecording = false);
    }
 
    setState(() {
-     // Default to the frame-relative symbol: first shot shows 'X', second shows '/'
-     // when entering post-phase, so the user sees the appropriate symbol by default.
+     // Default to the frame-relative symbol: first shot shows 'X', second shows '/' when entering post-phase
      selectedOutcome = widget.frameShotIndex == 1 ? 'X' : '/';
      isFoul = false;
 
@@ -239,7 +224,6 @@ class _ShotPageState extends State<ShotPage> {
 
  void _selectOutcome(String outcome) {
    setState(() {
-     // Toggle selection
      selectedOutcome = selectedOutcome == outcome ? null : outcome;
      isFoul = false;
 
@@ -264,26 +248,20 @@ class _ShotPageState extends State<ShotPage> {
 
 
  void _submitShot(BuildContext context) {
-   // 1. Determine final pins standing (true=standing)
-   // Pins that were already down (false in initialPins) must remain down (false in currentPinsState).
-   // The currentPinsState already handles this logic within _togglePin and _selectOutcome,
-   // as it represents the pin state AFTER the shot relative to the initial state.
-  
+   // 1. Determine final pins standing (true=standing)  
    final List<bool> pinsStanding = currentPinsState;
 
 
    // 2. Calculate pins knocked down (Count)
-   // Count = (Pins standing initially) - (Pins standing now)
    final int initialStandingCount = widget.initialPins.where((p) => p).length;
    final int currentStandingCount = pinsStanding.where((p) => p).length;
    final int pinsDownCount = initialStandingCount - currentStandingCount;
   
    Navigator.pop(context, {
-     'pinsStanding': pinsStanding, // true = standing (for the leaveType bitmask)
-     'pinsDownCount': pinsDownCount, // # of pins knocked down (Count)
-     'outcome': selectedOutcome, // (Position)
+     'pinsStanding': pinsStanding,
+     'pinsDownCount': pinsDownCount,
+     'outcome': selectedOutcome,
      'isFoul': isFoul,
-     // include the pre/post selections so the caller can update its UI
      'stance': _stance,
      'board': _selectedBoard,
      'lane': _selectedLane,
@@ -378,12 +356,9 @@ class _ShotPageState extends State<ShotPage> {
    );
  }
 
-
- // --- New UI helpers ---
  Widget _buildStanceSlider({double scale = 1.0}) {
  // Compact, trackless slider: show only thumb and tick marks with longer width.
  final parentWidth = MediaQuery.of(context).size.width;
- // Make slider as long as possible on the watch
  final width = (parentWidth * 0.995) * scale;
 
 
@@ -402,14 +377,13 @@ class _ShotPageState extends State<ShotPage> {
          ),
        ),
        SizedBox(height: 2 * scale),
-       // Longer slider with larger thumb. We'll draw major ticks (every 5) with a CustomPaint overlay
        SizedBox(
          width: width,
          height: 44 * scale,
          child: Stack(
            alignment: Alignment.center,
            children: [
-             // Custom paint draws major ticks every 5 units
+             // Draws major ticks every 5 units
              CustomPaint(
                size: Size(width, 44 * scale),
                painter: _MajorTickPainter(scale: scale),
@@ -421,7 +395,7 @@ class _ShotPageState extends State<ShotPage> {
                  inactiveTrackColor: Colors.transparent,
                  thumbShape: RoundSliderThumbShape(enabledThumbRadius: 16 * scale, disabledThumbRadius: 16 * scale),
                  overlayShape: RoundSliderOverlayShape(overlayRadius: 0),
-                 // hide built-in tick marks (we draw our own)
+                 // hide built-in tick marks
                  tickMarkShape: const RoundSliderTickMarkShape(tickMarkRadius: 0),
                  activeTickMarkColor: Colors.transparent,
                  inactiveTickMarkColor: Colors.transparent,
@@ -440,9 +414,6 @@ class _ShotPageState extends State<ShotPage> {
        ),
      ],
    );
-
-
-   // (old slider variant removed)
  }
 
 
@@ -559,7 +530,7 @@ Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
   final String compact = widget.frameShotIndex == 1 ? 'X' : '/';
    final double w = 64 * scale;
    final double h = 44 * scale;
-   // Simple toggle button (no popup) for Strike/Spare — tapping toggles the outcome
+   // Simple toggle button (no popup) for Strike/Spare
   final bool isSelected = selectedOutcome == compact;
   final Color bg = isSelected ? const Color.fromRGBO(80, 200, 120, 1) : const Color.fromRGBO(153, 153, 153, 1);
   final Color textColor = isSelected ? Colors.black : Colors.white;
@@ -609,18 +580,6 @@ Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
    );
  }
 
-
- // placeholder buttons removed — function kept commented in case we need it later
- // Widget _buildPlaceholderButton({double scale = 1.0}) {
- //   return Container(
- //     width: 36 * scale,
- //     height: 36 * scale,
- //     decoration: BoxDecoration(border: Border.all(color: Colors.black), color: const Color.fromRGBO(153, 153, 153, 1)),
- //     alignment: Alignment.center,
- //   );
- // }
-
-
  Widget _buildHorizontalSpeedPicker({double scale = 1.0}) {
    const double itemWidth = 40;
    final controller = ScrollController(initialScrollOffset: 0);
@@ -661,8 +620,6 @@ Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
              final values = List<int>.generate(351, (i) => i + 50);
              final currentValue = (_ballSpeed * 10).round().clamp(values.first, values.last);
 
-
-             // center the selected value after layout so it sits in the middle
              WidgetsBinding.instance.addPostFrameCallback((_) {
                final idx = ((_ballSpeed * 10).round() - values.first);
                centerOnValue(idx.clamp(0, values.length - 1));
@@ -670,9 +627,8 @@ Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
 
 
              return Container(
-               // restore a slightly larger height so the picker visuals match previous spacing
                height: 28 * scale,
-               width: constraints.maxWidth, // extend full available width
+               width: constraints.maxWidth,
                decoration: BoxDecoration(
                  gradient: const LinearGradient(
                    begin: Alignment.centerLeft,
@@ -753,7 +709,6 @@ Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
 
 
  Widget _buildBackToPreButton({double scale = 1.0}) {
-   // Smaller back button so it sits closer to the other action buttons.
    return GestureDetector(
      onTap: _backToPre,
      child: Container(
@@ -799,16 +754,11 @@ Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
      ),
    );
  }
-
-
 }
 
-
-// Painter that draws major tick marks every 5 units along the slider width
 class _MajorTickPainter extends CustomPainter {
  final double scale;
  _MajorTickPainter({required this.scale});
-
 
  @override
  void paint(Canvas canvas, Size size) {
@@ -820,16 +770,12 @@ class _MajorTickPainter extends CustomPainter {
 
    const int min = 1;
    const int max = 40;
-   // Add a small horizontal padding so ticks line up visually with the end labels
    final double pad = 6.0 * scale;
    final double avail = math.max(0.0, size.width - 2 * pad);
 
-
-   // draw ticks at 5,10,...,40
    for (int v = 5; v <= max; v += 5) {
      double norm = (v - min) / (max - min);
      final double x = pad + norm * avail;
-     // Center the tick marks vertically inside the slider area (slightly tighter)
      final double top = size.height * 0.40;
      final double bottom = size.height * 0.60;
      canvas.drawLine(Offset(x, top), Offset(x, bottom), paint);

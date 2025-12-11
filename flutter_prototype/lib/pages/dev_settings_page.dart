@@ -38,7 +38,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
             children: [
               const SizedBox(height: 12),
 
-              // ---- Title ----
+              // Title 
               const Text(
                 "BLUETOOTH",
                 style: TextStyle(
@@ -50,7 +50,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
 
               const SizedBox(height: 12),
 
-              // ---- Connection Status ----
+              // Connection Status
               Obx(() {
                 final connected = ble.isConnected.value;
                 final addr = ble.connectedDeviceAddress.value;
@@ -81,7 +81,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
 
               const SizedBox(height: 14),
 
-              // ---- Buttons Row ----
+              // Buttons Row
               Row(
                 children: [
                   Expanded(
@@ -120,7 +120,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
 
                   const SizedBox(width: 6),
 
-                  // ---- SEND TEST JSON ----
+                  // Send Test JSON
                   Expanded(
                     child: SizedBox(
                       height: 32,
@@ -147,7 +147,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
 
               const SizedBox(height: 12),
 
-              // ---- JSON Output Box ----
+              // JSON Output Box
               Container(
                 width: 120,
                 height: 50, 
