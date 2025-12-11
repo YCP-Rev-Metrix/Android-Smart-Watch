@@ -557,19 +557,18 @@ class _BowlingShotState extends State<BowlingShot> {
 
 
 	void _openShotPage() async {
-		// Only allow recording if this is the currently active shot
-		if (!widget.isInputActive) return;
-
-
 		final activeGame = _sessionController.currentSession!.games.first;
 
+		// Determine if this shot already exists (recorded) so we can edit it
+		final shotToDisplay = activeGame.frames[widget.frameIndex].shots.length >= widget.shotIndex
+			? activeGame.frames[widget.frameIndex].shots[widget.shotIndex - 1]
+			: null;
 
-		// Logic to set initial pins based on whether it's shot 1 or a subsequent shot
-		final initialPinsStanding = widget.shotIndex == 1
-					? List.filled(10, true) // Reset for Shot 1
-					// For shot 2/3, use the pins left from the previous shot in the frame
-					: activeGame.frames[widget.frameIndex].shots.last.pinsState;
-
+		// Logic to set initial pins based on whether it's shot 1 or a subsequent shot,
+		// or use the recorded shot's pins if editing.
+		final initialPinsStanding = shotToDisplay != null
+			? shotToDisplay.pinsState
+			: (widget.shotIndex == 1 ? List.filled(10, true) : activeGame.frames[widget.frameIndex].shots.last.pinsState);
 
 		final shotResult = await Navigator.push<Map<String, dynamic>>(
 			context,
@@ -584,6 +583,9 @@ class _BowlingShotState extends State<BowlingShot> {
 					initialBoard: board,
 					initialBall: ball,
 					initialSpeed: speed,
+					// If editing an existing shot, start in post-shot mode so pins are editable
+					startInPost: shotToDisplay != null,
+					initialIsFoul: shotToDisplay?.isFoul,
 				),
 			),
 		);
@@ -597,17 +599,29 @@ class _BowlingShotState extends State<BowlingShot> {
 				speed = (shotResult['speed'] as double?) ?? speed;
 				ball = (shotResult['ball'] as int?) ?? ball;
 			});
-			_recordShot(shotResult);
+
+			if (shotToDisplay != null) {
+				// Edit existing shot
+				_sessionController.editShot(
+					frameIndex: widget.frameIndex,
+					shotIndexInFrame: widget.shotIndex - 1,
+					lane: lane,
+					speed: speed,
+					hitBoard: board,
+					ball: ball,
+					standingPins: shotResult['pinsStanding'] as List<bool>,
+					pinsDownCount: shotResult['pinsDownCount'] as int,
+					position: (shotResult['outcome'] as String?) ?? (shotResult['pinsDownCount'] as int).toString(),
+					isFoul: shotResult['isFoul'] as bool,
+				);
+			} else {
+				// New shot for the active input location
+				_recordShot(shotResult);
+			}
 		}
 	}
 
-	bool get _isRecordedShot {
-        final activeGame = _sessionController.currentSession!.games.first;
-        final frame = activeGame.frames[widget.frameIndex];
-        // A shot is recorded if its 1-based index (widget.shotIndex) is less than 
-        // or equal to the number of shots currently recorded in the frame.
-        return widget.shotIndex <= frame.shots.length;
-    }
+	
 	
 	void _recordShot(Map<String, dynamic> shotResult) {
 		final List<bool> pinsStandingResult = shotResult['pinsStanding'] as List<bool>;
@@ -736,8 +750,7 @@ class _BowlingShotState extends State<BowlingShot> {
 			extendBodyBehindAppBar: true,
 			body: Center(
 				child: GestureDetector(
-					// Tapping only opens the shot page if it's the active input shot
-					onTap: widget.isInputActive ? _openShotPage : null,
+					onTap: _openShotPage,
 					child: Container(
 						width: 280,
 						height: 280,

@@ -16,6 +16,12 @@ class ShotPage extends StatefulWidget {
   final int? initialLane;
   final int? initialBall;
   final double? initialSpeed;
+  // If true, start the page in the post-shot editing phase so pins are editable immediately
+  final bool startInPost;
+  // Optional initial outcome (e.g. 'X', '/', 'F') to pre-select the outcome button
+  final String? initialOutcome;
+  // Optional initial foul flag
+  final bool? initialIsFoul;
 
   const ShotPage({
     super.key,
@@ -26,6 +32,9 @@ class ShotPage extends StatefulWidget {
     this.initialLane,
     this.initialBall,
     this.initialSpeed,
+    this.startInPost = false,
+    this.initialOutcome,
+    this.initialIsFoul,
   });
 
 
@@ -68,6 +77,27 @@ class _ShotPageState extends State<ShotPage> {
     if (widget.initialLane != null) _selectedLane = widget.initialLane!;
     if (widget.initialBall != null) _selectedBall = widget.initialBall!;
     if (widget.initialSpeed != null) _ballSpeed = widget.initialSpeed!;
+    // If caller provided initial post-shot data (editing an existing shot), prefill
+    // the outcome / foul / pins so the post-phase shows the correct state when the
+    // user navigates to it. IMPORTANT: do NOT force the UI into post-phase so users
+    // still see the pre-shot controls first and can access both phases.
+    if (widget.startInPost) {
+      // Pre-select outcome if provided (X, /, F)
+      if (widget.initialOutcome != null) {
+        selectedOutcome = widget.initialOutcome;
+        if (selectedOutcome == 'X' || selectedOutcome == '/') {
+          // For X or / we assume all pins were knocked down
+          currentPinsState = List.filled(10, false);
+        }
+      }
+      if (widget.initialIsFoul != null) {
+        isFoul = widget.initialIsFoul!;
+        if (isFoul) {
+          // For fouls, keep pins as the initialPins (no pins knocked down)
+          currentPinsState = List.from(widget.initialPins);
+        }
+      }
+    }
  }
 
 
