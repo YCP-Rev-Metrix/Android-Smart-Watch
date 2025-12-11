@@ -205,7 +205,7 @@ class _OtherPageState extends State<OtherPage> {
                               border: Border(
                                 right: BorderSide(
                                   color: Colors.black.withOpacity(0.2),
-                                  width: 0.8, // thin vertical line
+                                  width: 0.8,
                                 ),
                               ),
                             ),

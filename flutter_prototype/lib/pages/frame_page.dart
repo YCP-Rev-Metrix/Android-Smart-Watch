@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'game_page.dart'; 
 import 'shot_page.dart'; 
 import '../controllers/session_controller.dart'; 
-import '../models/frame.dart'; 
 
 // Global access to the controller
 final SessionController _sessionController = SessionController();
@@ -30,7 +29,7 @@ class FrameShell extends StatefulWidget {
 class _FrameShellState extends State<FrameShell> {
 	late int _viewFrameIndex;
 	bool _frameSelectMode = false;
-    // FIX 1: Add a flag to indicate if the user has manually selected a frame to view.
+    // Flag to indicate if the user has manually selected a frame to view.
 	bool _isManuallyViewingPastFrame = false; 
 
 
@@ -48,20 +47,6 @@ class _FrameShellState extends State<FrameShell> {
 		super.initState();
 		_viewFrameIndex = _currentActiveFrameIndex;
 	}
-	
-	// FIX 2: The entire didChangeDependencies method is removed/commented out. 
-    // It was the source of the view locking, as it constantly reset the view
-    // to the active input frame.
-	/*
-    @override
-	void didChangeDependencies() {
-		super.didChangeDependencies();
-		if (_viewFrameIndex == _currentActiveFrameIndex) {
-				_viewFrameIndex = _currentActiveFrameIndex;
-		}
-	}
-    */
-
 
 	void _onVerticalSwipe(DragEndDetails details) {
 		if (details.primaryVelocity == null) return;
@@ -85,10 +70,9 @@ class _FrameShellState extends State<FrameShell> {
 
 	void _exitFrameSelection() {
 		setState(() {
-			// This is correct: when cancelling, jump back to the frame requiring input
 			_viewFrameIndex = _currentActiveFrameIndex; 
 			_frameSelectMode = false;
-            // FIX 3: Clear the flag when jumping back to the active input frame.
+            // Clear the flag when jumping back to the active input frame.
             _isManuallyViewingPastFrame = false;
 		});
 	}
@@ -97,10 +81,9 @@ class _FrameShellState extends State<FrameShell> {
 	void _selectFrame(int index) {
 		HapticFeedback.lightImpact();
 		setState(() {
-			// This is correct: set the view to the selected frame
 			_viewFrameIndex = index; 
 			_frameSelectMode = false;
-            // FIX 4: Set flag if a past frame was selected (i.e., not the current active frame).
+            // Set flag if a past frame was selected (i.e., not the current active frame).
 			_isManuallyViewingPastFrame = (index != _currentActiveFrameIndex); 
 		});
 	}
@@ -122,9 +105,6 @@ class _FrameShellState extends State<FrameShell> {
 					_viewFrameIndex = inputFrameIndex.clamp(0, maxValidIndex).toInt();
 				}
 
-                // FIX 5: Implement clean auto-advance logic.
-                // The view should automatically advance to the input frame when a shot is completed,
-                // but ONLY if the user has NOT manually selected a previous frame to view.
                 if (!_isManuallyViewingPastFrame && _viewFrameIndex < inputFrameIndex) {
                     _viewFrameIndex = inputFrameIndex;
                 }
@@ -204,7 +184,7 @@ class _BowlingFrameState extends State<BowlingFrame> {
 		final frame = _sessionController.currentSession!.games.first.frames[widget.frameIndex];
 		
 		final initialPage = widget.isInputActive 
-			? frame.shots.length // FIX: Start on the page for the next shot (index 0, 1, or 2)
+			? frame.shots.length 
 			: (frame.shots.isNotEmpty ? frame.shots.length - 1 : 0);
 
 		_controller = PageController(initialPage: initialPage.clamp(0, 2)); 
@@ -223,11 +203,9 @@ class _BowlingFrameState extends State<BowlingFrame> {
 			_initializeController();
 		} else if (widget.isInputActive) {
 			// Case 2: Same frame, but a shot was recorded (or pins were cleared)
-			// Animate the PageView to the new shot input page.
 			final frame = _sessionController.currentSession!.games.first.frames[newFrameIndex];
 			final newPage = frame.shots.length; // The index for the next shot is current shots.length
 			final currentPage = _controller.page?.round() ?? 0;
-			
 			// If the new shot count is greater than the current visible page, animate to the new page.
 			if (newPage > currentPage) {
 				_controller.animateToPage(
@@ -245,30 +223,21 @@ class _BowlingFrameState extends State<BowlingFrame> {
 		super.dispose();
 	}
 
-	int _getActiveShotIndex(Frame frame) {
-		return frame.shots.length; 
-	}
-	
 	@override
 	Widget build(BuildContext context) {
 		final activeGame = _sessionController.currentSession!.games.first;
 		final frame = activeGame.frames[widget.frameIndex];
-		// final activeShotIndex = _getActiveShotIndex(frame); // No longer needed
 
 		final maxShotSlots = (widget.frameIndex == 9) ? 3 : 2;
 		int itemCount;
 		
 		if (widget.isInputActive) {
-			// FIX 1: Show all recorded shots in the frame + 1 for the current input screen.
-			// The itemCount must not exceed the max shots allowed for the frame (2 or 3).
 			itemCount = (frame.shots.length + 1).clamp(1, maxShotSlots); 
 		} else {
 			itemCount = frame.shots.length;
 			if (itemCount == 0) itemCount = 1;
 		}
 
-		// FIX 2: Only allow swiping (BouncingScrollPhysics) if there is more than one shot/page.
-		// If itemCount is 1 (e.g., Frame 1, Shot 1 input), disable scrolling.
 		final scrollPhysics = itemCount > 1 
 			? const BouncingScrollPhysics() 
 			: const NeverScrollableScrollPhysics();
@@ -276,11 +245,11 @@ class _BowlingFrameState extends State<BowlingFrame> {
 
 		return PageView.builder(
 			controller: _controller,
-			physics: scrollPhysics, // Use conditional physics
+			physics: scrollPhysics,
 			itemCount: itemCount,
 			itemBuilder: (context, pageIndex) { 
 				
-				final shotIndex = pageIndex; // FIX 3: shotIndex is now simply the pageIndex
+				final shotIndex = pageIndex;
 				
 				// Calculate the starting global shot number for this PageView
 				final shotsBeforeFrame = activeGame.frames
@@ -288,12 +257,9 @@ class _BowlingFrameState extends State<BowlingFrame> {
 					.fold(0, (sum, f) => sum + f.shots.length);
 				final initialGlobalShot = shotsBeforeFrame + 1;
 				
-				// FIX 4: Determine if this is the shot currently awaiting input.
-				// It's the input page IF it's the active frame AND it's the last page (pageIndex == frame.shots.length).
 				final bool isCurrentInput = widget.isInputActive && (pageIndex == frame.shots.length);
 				
 				if (!widget.isInputActive && pageIndex >= frame.shots.length) {
-					// This handles the case where itemCount=1 for an empty past frame
 					return Container(color: widget.color);
 				}
 				
@@ -301,7 +267,7 @@ class _BowlingFrameState extends State<BowlingFrame> {
 					key: ValueKey('${widget.frameIndex}-${shotIndex + 1}'),
 					color: widget.color,
 					frameIndex: widget.frameIndex,
-					shotIndex: shotIndex + 1, // 1-based shot index
+					shotIndex: shotIndex + 1,
 					globalShotNumber: initialGlobalShot + shotIndex,
 					isInputActive: isCurrentInput,
 				);
@@ -317,8 +283,8 @@ class _BowlingFrameState extends State<BowlingFrame> {
 
 
 class FrameSelectionOverlay extends StatefulWidget {
-	final int activeFrame; // The frame currently selected/viewed
-	final int maxSelectableFrame; // The index of the furthest frame (current input frame)
+	final int activeFrame;
+	final int maxSelectableFrame;
 	final List<Color> colors;
 	final ValueChanged<int> onSelect;
 	final VoidCallback onCancel;
@@ -402,14 +368,13 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
 						controller: _controller,
 						onPageChanged: _onPageChanged,
 						physics: const BouncingScrollPhysics(),
-						// CRITICAL: Restrict the number of pages displayed (up to the current active frame)
+						//Restrict the number of pages displayed (up to the current active frame)
 						itemCount: widget.maxSelectableFrame + 1,
 						itemBuilder: (context, i) {
 							final active = i == _selected;
 							
 							final isComplete = _sessionController.currentSession!.games.first.frames[i].isComplete;
 							
-							// FIX: Use modulo operator to cycle through colors dynamically
 							final int colorIndex = i % widget.colors.length;
 							
 							final Color frameColor = isComplete
@@ -443,6 +408,7 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
 													color: Colors.white,
 													fontSize: 16,
 													fontWeight: FontWeight.w500,
+													decoration: TextDecoration.none
 												),
 											),
 										),
@@ -464,11 +430,11 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
 
 
 class BowlingShot extends StatefulWidget {
-	final int frameIndex; // 0-based
-	final int shotIndex; // 1-based (1 or 2)
+	final int frameIndex;
+	final int shotIndex; 
 	final int globalShotNumber;
 	final Color color;
-	final bool isInputActive; // Flag if this specific shot is ready for input
+	final bool isInputActive;
 
 
 	const BowlingShot({
@@ -501,7 +467,7 @@ class _BowlingShotState extends State<BowlingShot> {
 	@override
 	void didUpdateWidget(covariant BowlingShot oldWidget) {
 		super.didUpdateWidget(oldWidget);
-		// Important: Re-read the data if the frame/shot context changes
+		// Re-read the data if the frame/shot context changes
 		if (oldWidget.frameIndex != widget.frameIndex || oldWidget.shotIndex != widget.shotIndex) {
 			_updateShotDisplay();
 		}
@@ -515,12 +481,11 @@ class _BowlingShotState extends State<BowlingShot> {
 	
 		// Determine which shot data to display (if any)
 		final shotToDisplay = frame.shots.length >= widget.shotIndex
-					? frame.shots[widget.shotIndex - 1] // Use the recorded shot
-					: null; // Use current defaults/placeholders
+					? frame.shots[widget.shotIndex - 1] 
+					: null;
 			
 		setState(() {
 			if (shotToDisplay != null) {
-				// Use shot data
 				pinsDown = shotToDisplay.pinsState.map((isStanding) => !isStanding).toList();
 				lane = frame.lane;
 				board = shotToDisplay.hitBoard;
@@ -528,14 +493,10 @@ class _BowlingShotState extends State<BowlingShot> {
 				ball = shotToDisplay.ball;
 				position = shotToDisplay.position;
 			} else {
-			// For an upcoming shot, prefer to pre-fill values from the last
-			// recorded shot in this frame when available. If no prior shot
-			// exists, fall back to the user's global defaults stored in the
-			// SessionController so dropdown choices persist across shots/frames.
 			pinsDown = List.filled(10, false);
 			if (frame.shots.isNotEmpty) {
 				final lastShot = frame.shots.last;
-				lane = frame.lane; // frame.lane is updated when recording shots
+				lane = frame.lane;
 				board = lastShot.hitBoard;
 				speed = lastShot.speed;
 				ball = lastShot.ball;
@@ -552,10 +513,6 @@ class _BowlingShotState extends State<BowlingShot> {
 		});
 	}
 
-
-	// _openOtherPage removed — OtherPage editor route is disabled.
-
-
 	void _openShotPage() async {
 		final activeGame = _sessionController.currentSession!.games.first;
 
@@ -565,7 +522,6 @@ class _BowlingShotState extends State<BowlingShot> {
 			: null;
 
 		// Logic to set initial pins based on whether it's shot 1 or a subsequent shot,
-		// or use the recorded shot's pins if editing.
 		final initialPinsStanding = shotToDisplay != null
 			? shotToDisplay.pinsState
 			: (widget.shotIndex == 1 ? List.filled(10, true) : activeGame.frames[widget.frameIndex].shots.last.pinsState);
@@ -576,14 +532,11 @@ class _BowlingShotState extends State<BowlingShot> {
 				builder: (_) => ShotPage(
 					initialPins: initialPinsStanding,
 					shotNumber: widget.globalShotNumber,
-					// Pass current local selections so ShotPage dropdowns/picker are
-					// initialized to the user's last-used values for consistency.
 					frameShotIndex: widget.shotIndex,
 					initialLane: lane,
 					initialBoard: board,
 					initialBall: ball,
 					initialSpeed: speed,
-					// If editing an existing shot, start in post-shot mode so pins are editable
 					startInPost: shotToDisplay != null,
 					initialIsFoul: shotToDisplay?.isFoul,
 				),
@@ -615,7 +568,6 @@ class _BowlingShotState extends State<BowlingShot> {
 					isFoul: shotResult['isFoul'] as bool,
 				);
 			} else {
-				// New shot for the active input location
 				_recordShot(shotResult);
 			}
 		}
@@ -776,7 +728,6 @@ class _BowlingShotState extends State<BowlingShot> {
 
 
 								GestureDetector(
-									// Info bar is read-only now; tapping does nothing
 									onTap: null,
 									child: Transform.scale(
 										scale: 0.8,
@@ -784,7 +735,6 @@ class _BowlingShotState extends State<BowlingShot> {
 									),
 								),
 							
-								// Removed 'Last Shot' label per UX request.
 							],
 						),
 					),
