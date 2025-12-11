@@ -33,14 +33,22 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             Log.i(TAG, "Advertise start success")
             mainHandler.post {
-                channel.invokeMethod("onAdvertisingStarted", null)
+                try {
+                    channel.invokeMethod("onAdvertisingStarted", null)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to invoke Flutter method: ${e.message}")
+                }
             }
         }
 
         override fun onStartFailure(errorCode: Int) {
             Log.e(TAG, "Advertise failed: $errorCode")
             mainHandler.post {
-                channel.invokeMethod("onAdvertisingFailed", errorCode)
+                try {
+                    channel.invokeMethod("onAdvertisingFailed", errorCode)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to invoke Flutter method: ${e.message}")
+                }
             }
         }
     }
@@ -63,7 +71,11 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
             Log.i(TAG, "Device connected: ${device.address}")
 
             mainHandler.post {
-                channel.invokeMethod("onConnectionStateChange", args)
+                try {
+                    channel.invokeMethod("onConnectionStateChange", args)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to invoke Flutter method: ${e.message}")
+                }
             }
         }
 
@@ -86,7 +98,11 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
                     "value" to value
                 )
                 mainHandler.post {
-                    channel.invokeMethod("onCharacteristicWrite", args)
+                    try {
+                        channel.invokeMethod("onCharacteristicWrite", args)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to invoke Flutter method: ${e.message}")
+                    }
                 }
             }
 
