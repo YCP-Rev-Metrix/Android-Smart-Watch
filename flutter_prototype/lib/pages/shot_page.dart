@@ -1,6 +1,7 @@
 // shot_page.dart
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import '../controllers/ble_manager.dart';
 
 
 class ShotPage extends StatefulWidget {
@@ -180,14 +181,21 @@ class _ShotPageState extends State<ShotPage> {
  }
 
 
- void _nextPhase() {
-   setState(() {
-  // Default to the frame-relative symbol: first shot shows 'X', second shows '/'
-  // when entering post-phase, so the user sees the appropriate symbol by default.
-  selectedOutcome = widget.frameShotIndex == 1 ? 'X' : '/';
-  isFoul = false;
+ void _nextPhase() async {
+   // Stop recording if it's active
+   if (_isRecording) {
+     // 🔥 Send BLE command to stop recording on phone
+     await BLEManager().sendRecordingCommand("stopRec");
+     setState(() => _isRecording = false);
+   }
 
-  _phase = Phase.post;
+   setState(() {
+     // Default to the frame-relative symbol: first shot shows 'X', second shows '/'
+     // when entering post-phase, so the user sees the appropriate symbol by default.
+     selectedOutcome = widget.frameShotIndex == 1 ? 'X' : '/';
+     isFoul = false;
+
+     _phase = Phase.post;
    });
  }
 
@@ -442,45 +450,70 @@ class _ShotPageState extends State<ShotPage> {
  }
 
 
- Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
-   if (round) {
-     return GestureDetector(
-       onTap: () => setState(() => _isRecording = !_isRecording),
-       child: CircleAvatar(
-         radius: 18 * scale,
-         backgroundColor: _isRecording ? Colors.redAccent : Colors.red,
-         child: Icon(_isRecording ? Icons.stop : Icons.fiber_manual_record, color: Colors.white, size: 18 * scale),
-       ),
-     );
-   }
+Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
+  Future<void> handleTap() async {
+    // If currently recording, stop and send command
+    if (_isRecording) {
+      await BLEManager().sendRecordingCommand("stopRec");
+      setState(() => _isRecording = false);
+    } else {
+      // Start recording
+      setState(() => _isRecording = true);
+      await BLEManager().sendRecordingCommand("startRec");
+    }
+  }
 
+  if (round) {
+    return GestureDetector(
+      onTap: handleTap,
+      child: CircleAvatar(
+        radius: 18 * scale,
+        backgroundColor: _isRecording ? Colors.redAccent : Colors.red,
+        child: Icon(
+          _isRecording ? Icons.stop : Icons.fiber_manual_record,
+          color: Colors.white,
+          size: 18 * scale,
+        ),
+      ),
+    );
+  }
 
-   final Color btnBg = _isRecording ? Colors.redAccent : const Color.fromRGBO(153, 153, 153, 1);
-   return GestureDetector(
-     onTap: () => setState(() => _isRecording = !_isRecording),
-     child: Container(
-       width: 44 * scale,
-       height: 28 * scale,
-       decoration: BoxDecoration(color: btnBg, border: Border.all(color: Colors.black)),
-       alignment: Alignment.center,
-       child: Icon(_isRecording ? Icons.stop : Icons.fiber_manual_record, color: Colors.white, size: 16 * scale),
-     ),
-   );
- }
+  final Color btnBg = _isRecording
+      ? Colors.redAccent
+      : const Color.fromRGBO(153, 153, 153, 1);
+
+  return GestureDetector(
+    onTap: handleTap,
+    child: Container(
+      width: 44 * scale,
+      height: 28 * scale,
+      decoration: BoxDecoration(
+        color: btnBg,
+        border: Border.all(color: Colors.black),
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        _isRecording ? Icons.stop : Icons.fiber_manual_record,
+        color: Colors.white,
+        size: 16 * scale,
+      ),
+    ),
+  );
+}
 
 
  Widget _buildNextPhaseButton({double scale = 1.0, bool round = false}) {
    if (round) {
      return IconButton(
        icon: Icon(Icons.arrow_forward, color: Colors.white, size: 20 * scale),
-       onPressed: _nextPhase,
+       onPressed: () => _nextPhase(),
        splashRadius: 18 * scale,
      );
    }
 
 
    return GestureDetector(
-     onTap: _nextPhase,
+     onTap: () => _nextPhase(),
      child: Container(
        width: 44 * scale,
        height: 28 * scale,

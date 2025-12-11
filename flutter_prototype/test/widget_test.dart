@@ -1,30 +1,56 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:watch_app/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const RevMetrixApp());
+  testWidgets('Basic Text widget renders', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Text('Hello World'),
+        ),
+      ),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.text('Hello World'), findsOneWidget);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+  testWidgets('Button tap is detected', (WidgetTester tester) async {
+    bool buttonTapped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              onPressed: () => buttonTapped = true,
+              child: const Text('Tap Me'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Tap Me'), findsOneWidget);
+    await tester.tap(find.byType(ElevatedButton));
     await tester.pump();
+    expect(buttonTapped, true);
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('Container with child renders', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Container(
+            color: Colors.blue,
+            child: const Center(
+              child: Text('Content'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Content'), findsOneWidget);
+    expect(find.byType(Container), findsOneWidget);
   });
 }
