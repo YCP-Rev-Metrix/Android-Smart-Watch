@@ -1,15 +1,34 @@
 // shot_page.dart
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import '../controllers/ble_manager.dart';
 
 
 class ShotPage extends StatefulWidget {
- // initialPins: List<bool> where true = pin is STANDING before this shot
- final List<bool> initialPins;
- final int shotNumber;
+  final List<bool> initialPins;
+  final int shotNumber;
+  final int frameShotIndex;
+  final int? initialBoard;
+  final int? initialLane;
+  final int? initialBall;
+  final double? initialSpeed;
+  final bool startInPost;
+  final String? initialOutcome;
+  final bool? initialIsFoul;
 
-
- const ShotPage({super.key, required this.initialPins, required this.shotNumber});
+  const ShotPage({
+    super.key,
+    required this.initialPins,
+    required this.shotNumber,
+    required this.frameShotIndex,
+    this.initialBoard,
+    this.initialLane,
+    this.initialBall,
+    this.initialSpeed,
+    this.startInPost = false,
+    this.initialOutcome,
+    this.initialIsFoul,
+  });
 
 
  @override
@@ -29,11 +48,11 @@ class _ShotPageState extends State<ShotPage> {
 
 
  // Pre-shot controls
- double _sliderPos = 21; // slider value 1..40, start so stance maps to 20
- int get _stance => 41 - _sliderPos.round(); // maps so left shows 40, right shows 1
- int _selectedBoard = 1;
- int _selectedLane = 1;
- int _selectedBall = 1;
+ double _sliderPos = 21;
+ int get _stance => 41 - _sliderPos.round();
+  int _selectedBoard = 1;
+  int _selectedLane = 1;
+  int _selectedBall = 1;
  bool _isRecording = false;
 
 
@@ -46,6 +65,28 @@ class _ShotPageState extends State<ShotPage> {
    super.initState();
    // Copy the initial pins standing (up) into the mutable state
    currentPinsState = List.from(widget.initialPins);
+    // Initialize the dropdowns/picker from passed-in initial values when provided
+    if (widget.initialBoard != null) _selectedBoard = widget.initialBoard!;
+    if (widget.initialLane != null) _selectedLane = widget.initialLane!;
+    if (widget.initialBall != null) _selectedBall = widget.initialBall!;
+    if (widget.initialSpeed != null) _ballSpeed = widget.initialSpeed!;
+    if (widget.startInPost) {
+      // Pre-select outcome if provided (X, /, F)
+      if (widget.initialOutcome != null) {
+        selectedOutcome = widget.initialOutcome;
+        if (selectedOutcome == 'X' || selectedOutcome == '/') {
+          // For X or / we assume all pins were knocked down
+          currentPinsState = List.filled(10, false);
+        }
+      }
+      if (widget.initialIsFoul != null) {
+        isFoul = widget.initialIsFoul!;
+        if (isFoul) {
+          // For fouls, keep pins as the initialPins (no pins knocked down)
+          currentPinsState = List.from(widget.initialPins);
+        }
+      }
+    }
  }
 
 
@@ -66,8 +107,8 @@ class _ShotPageState extends State<ShotPage> {
            mainAxisAlignment: MainAxisAlignment.start,
            crossAxisAlignment: CrossAxisAlignment.center,
            children: [
-             Text(
-               'Shot ${widget.shotNumber}',
+            Text(
+                       'Shot ${widget.frameShotIndex}',
                style: TextStyle(
                  color: Colors.white,
                  fontSize: 17 * uiScale,
@@ -149,8 +190,7 @@ class _ShotPageState extends State<ShotPage> {
 
  void _togglePin(int index) {
    setState(() {
-     // Toggle the state of the pin (standing <-> down),
-     // but ONLY if the pin was standing before this shot.
+     // Toggle the state of the pin (standing <-> down) only if it was initially standing
      if (widget.initialPins[index]) {
        currentPinsState[index] = !currentPinsState[index];
      }
@@ -158,8 +198,18 @@ class _ShotPageState extends State<ShotPage> {
  }
 
 
- void _nextPhase() {
+ void _nextPhase() async {
+   // Stop recording if it's active
+   if (_isRecording) {
+     await BLEManager().sendRecordingCommand("stopRec");
+     setState(() => _isRecording = false);
+   }
+
    setState(() {
+     // Default to the frame-relative symbol: first shot shows 'X', second shows '/' when entering post-phase
+     selectedOutcome = widget.frameShotIndex == 1 ? 'X' : '/';
+     isFoul = false;
+
      _phase = Phase.post;
    });
  }
@@ -174,7 +224,6 @@ class _ShotPageState extends State<ShotPage> {
 
  void _selectOutcome(String outcome) {
    setState(() {
-     // Toggle selection
      selectedOutcome = selectedOutcome == outcome ? null : outcome;
      isFoul = false;
 
@@ -199,26 +248,20 @@ class _ShotPageState extends State<ShotPage> {
 
 
  void _submitShot(BuildContext context) {
-   // 1. Determine final pins standing (true=standing)
-   // Pins that were already down (false in initialPins) must remain down (false in currentPinsState).
-   // The currentPinsState already handles this logic within _togglePin and _selectOutcome,
-   // as it represents the pin state AFTER the shot relative to the initial state.
-  
+   // 1. Determine final pins standing (true=standing)  
    final List<bool> pinsStanding = currentPinsState;
 
 
    // 2. Calculate pins knocked down (Count)
-   // Count = (Pins standing initially) - (Pins standing now)
    final int initialStandingCount = widget.initialPins.where((p) => p).length;
    final int currentStandingCount = pinsStanding.where((p) => p).length;
    final int pinsDownCount = initialStandingCount - currentStandingCount;
   
    Navigator.pop(context, {
-     'pinsStanding': pinsStanding, // true = standing (for the leaveType bitmask)
-     'pinsDownCount': pinsDownCount, // # of pins knocked down (Count)
-     'outcome': selectedOutcome, // (Position)
+     'pinsStanding': pinsStanding,
+     'pinsDownCount': pinsDownCount,
+     'outcome': selectedOutcome,
      'isFoul': isFoul,
-     // include the pre/post selections so the caller can update its UI
      'stance': _stance,
      'board': _selectedBoard,
      'lane': _selectedLane,
@@ -313,12 +356,9 @@ class _ShotPageState extends State<ShotPage> {
    );
  }
 
-
- // --- New UI helpers ---
  Widget _buildStanceSlider({double scale = 1.0}) {
  // Compact, trackless slider: show only thumb and tick marks with longer width.
  final parentWidth = MediaQuery.of(context).size.width;
- // Make slider as long as possible on the watch
  final width = (parentWidth * 0.995) * scale;
 
 
@@ -337,14 +377,13 @@ class _ShotPageState extends State<ShotPage> {
          ),
        ),
        SizedBox(height: 2 * scale),
-       // Longer slider with larger thumb. We'll draw major ticks (every 5) with a CustomPaint overlay
        SizedBox(
          width: width,
          height: 44 * scale,
          child: Stack(
            alignment: Alignment.center,
            children: [
-             // Custom paint draws major ticks every 5 units
+             // Draws major ticks every 5 units
              CustomPaint(
                size: Size(width, 44 * scale),
                painter: _MajorTickPainter(scale: scale),
@@ -356,7 +395,7 @@ class _ShotPageState extends State<ShotPage> {
                  inactiveTrackColor: Colors.transparent,
                  thumbShape: RoundSliderThumbShape(enabledThumbRadius: 16 * scale, disabledThumbRadius: 16 * scale),
                  overlayShape: RoundSliderOverlayShape(overlayRadius: 0),
-                 // hide built-in tick marks (we draw our own)
+                 // hide built-in tick marks
                  tickMarkShape: const RoundSliderTickMarkShape(tickMarkRadius: 0),
                  activeTickMarkColor: Colors.transparent,
                  inactiveTickMarkColor: Colors.transparent,
@@ -375,9 +414,6 @@ class _ShotPageState extends State<ShotPage> {
        ),
      ],
    );
-
-
-   // (old slider variant removed)
  }
 
 
@@ -415,45 +451,70 @@ class _ShotPageState extends State<ShotPage> {
  }
 
 
- Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
-   if (round) {
-     return GestureDetector(
-       onTap: () => setState(() => _isRecording = !_isRecording),
-       child: CircleAvatar(
-         radius: 18 * scale,
-         backgroundColor: _isRecording ? Colors.redAccent : Colors.red,
-         child: Icon(_isRecording ? Icons.stop : Icons.fiber_manual_record, color: Colors.white, size: 18 * scale),
-       ),
-     );
-   }
+Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
+  Future<void> handleTap() async {
+    // If currently recording, stop and send command
+    if (_isRecording) {
+      await BLEManager().sendRecordingCommand("stopRec");
+      setState(() => _isRecording = false);
+    } else {
+      // Start recording
+      setState(() => _isRecording = true);
+      await BLEManager().sendRecordingCommand("startRec");
+    }
+  }
 
+  if (round) {
+    return GestureDetector(
+      onTap: handleTap,
+      child: CircleAvatar(
+        radius: 18 * scale,
+        backgroundColor: _isRecording ? Colors.redAccent : Colors.red,
+        child: Icon(
+          _isRecording ? Icons.stop : Icons.fiber_manual_record,
+          color: Colors.white,
+          size: 18 * scale,
+        ),
+      ),
+    );
+  }
 
-   final Color btnBg = _isRecording ? Colors.redAccent : const Color.fromRGBO(153, 153, 153, 1);
-   return GestureDetector(
-     onTap: () => setState(() => _isRecording = !_isRecording),
-     child: Container(
-       width: 44 * scale,
-       height: 28 * scale,
-       decoration: BoxDecoration(color: btnBg, border: Border.all(color: Colors.black)),
-       alignment: Alignment.center,
-       child: Icon(_isRecording ? Icons.stop : Icons.fiber_manual_record, color: Colors.white, size: 16 * scale),
-     ),
-   );
- }
+  final Color btnBg = _isRecording
+      ? Colors.redAccent
+      : const Color.fromRGBO(153, 153, 153, 1);
+
+  return GestureDetector(
+    onTap: handleTap,
+    child: Container(
+      width: 44 * scale,
+      height: 28 * scale,
+      decoration: BoxDecoration(
+        color: btnBg,
+        border: Border.all(color: Colors.black),
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        _isRecording ? Icons.stop : Icons.fiber_manual_record,
+        color: Colors.white,
+        size: 16 * scale,
+      ),
+    ),
+  );
+}
 
 
  Widget _buildNextPhaseButton({double scale = 1.0, bool round = false}) {
    if (round) {
      return IconButton(
        icon: Icon(Icons.arrow_forward, color: Colors.white, size: 20 * scale),
-       onPressed: _nextPhase,
+       onPressed: () => _nextPhase(),
        splashRadius: 18 * scale,
      );
    }
 
 
    return GestureDetector(
-     onTap: _nextPhase,
+     onTap: () => _nextPhase(),
      child: Container(
        width: 44 * scale,
        height: 28 * scale,
@@ -466,20 +527,24 @@ class _ShotPageState extends State<ShotPage> {
 
 
  Widget _buildStrikeOrSpareButton({double scale = 1.0}) {
-   final String compact = widget.shotNumber == 1 ? 'X' : '/';
+  final String compact = widget.frameShotIndex == 1 ? 'X' : '/';
    final double w = 64 * scale;
    final double h = 44 * scale;
-   // Simple toggle button (no popup) for Strike/Spare — tapping toggles the outcome
-   return GestureDetector(
-     onTap: () => _selectOutcome(widget.shotNumber == 1 ? 'X' : '/'),
-     child: Container(
-       width: w,
-       height: h,
-       decoration: BoxDecoration(color: const Color.fromRGBO(153, 153, 153, 1), border: Border.all(color: Colors.black, width: 0.6 * scale)),
-       alignment: Alignment.center,
-       child: Text(compact, style: TextStyle(color: Colors.white, fontSize: 14 * scale, fontWeight: FontWeight.w700)),
-     ),
-   );
+   // Simple toggle button (no popup) for Strike/Spare
+  final bool isSelected = selectedOutcome == compact;
+  final Color bg = isSelected ? const Color.fromRGBO(80, 200, 120, 1) : const Color.fromRGBO(153, 153, 153, 1);
+  final Color textColor = isSelected ? Colors.black : Colors.white;
+
+  return GestureDetector(
+    onTap: () => _selectOutcome(compact),
+    child: Container(
+      width: w,
+      height: h,
+      decoration: BoxDecoration(color: bg, border: Border.all(color: Colors.black, width: 0.6 * scale)),
+      alignment: Alignment.center,
+      child: Text(compact, style: TextStyle(color: textColor, fontSize: 14 * scale, fontWeight: FontWeight.w700)),
+    ),
+  );
  }
 
 
@@ -514,18 +579,6 @@ class _ShotPageState extends State<ShotPage> {
      ),
    );
  }
-
-
- // placeholder buttons removed — function kept commented in case we need it later
- // Widget _buildPlaceholderButton({double scale = 1.0}) {
- //   return Container(
- //     width: 36 * scale,
- //     height: 36 * scale,
- //     decoration: BoxDecoration(border: Border.all(color: Colors.black), color: const Color.fromRGBO(153, 153, 153, 1)),
- //     alignment: Alignment.center,
- //   );
- // }
-
 
  Widget _buildHorizontalSpeedPicker({double scale = 1.0}) {
    const double itemWidth = 40;
@@ -567,8 +620,6 @@ class _ShotPageState extends State<ShotPage> {
              final values = List<int>.generate(351, (i) => i + 50);
              final currentValue = (_ballSpeed * 10).round().clamp(values.first, values.last);
 
-
-             // center the selected value after layout so it sits in the middle
              WidgetsBinding.instance.addPostFrameCallback((_) {
                final idx = ((_ballSpeed * 10).round() - values.first);
                centerOnValue(idx.clamp(0, values.length - 1));
@@ -576,9 +627,8 @@ class _ShotPageState extends State<ShotPage> {
 
 
              return Container(
-               // restore a slightly larger height so the picker visuals match previous spacing
                height: 28 * scale,
-               width: constraints.maxWidth, // extend full available width
+               width: constraints.maxWidth,
                decoration: BoxDecoration(
                  gradient: const LinearGradient(
                    begin: Alignment.centerLeft,
@@ -659,7 +709,6 @@ class _ShotPageState extends State<ShotPage> {
 
 
  Widget _buildBackToPreButton({double scale = 1.0}) {
-   // Smaller back button so it sits closer to the other action buttons.
    return GestureDetector(
      onTap: _backToPre,
      child: Container(
@@ -705,16 +754,11 @@ class _ShotPageState extends State<ShotPage> {
      ),
    );
  }
-
-
 }
 
-
-// Painter that draws major tick marks every 5 units along the slider width
 class _MajorTickPainter extends CustomPainter {
  final double scale;
  _MajorTickPainter({required this.scale});
-
 
  @override
  void paint(Canvas canvas, Size size) {
@@ -726,16 +770,12 @@ class _MajorTickPainter extends CustomPainter {
 
    const int min = 1;
    const int max = 40;
-   // Add a small horizontal padding so ticks line up visually with the end labels
    final double pad = 6.0 * scale;
    final double avail = math.max(0.0, size.width - 2 * pad);
 
-
-   // draw ticks at 5,10,...,40
    for (int v = 5; v <= max; v += 5) {
      double norm = (v - min) / (max - min);
      final double x = pad + norm * avail;
-     // Center the tick marks vertically inside the slider area (slightly tighter)
      final double top = size.height * 0.40;
      final double bottom = size.height * 0.60;
      canvas.drawLine(Offset(x, top), Offset(x, bottom), paint);

@@ -3,14 +3,14 @@
 import 'shot.dart';
 
 class Frame {
-  final int frameNumber; // Frame # (1-10)
-  int lane; // lane # for this frame/shot
-  final List<Shot> shots; // List of shots for the frame
+  final int frameNumber;
+  int lane;
+  final List<Shot> shots;
 
   Frame({
     required this.frameNumber,
     required this.lane,
-    this.shots = const [], // Initialize as an empty list
+    this.shots = const [],
   });
 
   /// Checks if the frame is logically complete (Strike, Spare, or two shots taken).
@@ -35,7 +35,7 @@ class Frame {
     return Frame(
       frameNumber: frameNumber,
       lane: lane,
-      shots: [...shots, newShot], // Add the new shot to the list
+      shots: [...shots, newShot],
     );
   }
 

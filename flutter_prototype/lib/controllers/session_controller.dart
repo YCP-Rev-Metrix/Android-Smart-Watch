@@ -1,6 +1,10 @@
 // lib/controllers/session_controller.dart
 
+import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../models/frame.dart'; 
 import '../models/shot.dart'; 
 
@@ -54,8 +58,7 @@ class SessionModel {
 // #############################################################
 
 class SessionController extends ChangeNotifier { 
-  
-  // --- Singleton Pattern ---
+  // Singleton pattern
   static final SessionController _instance = SessionController._internal();
   
   factory SessionController() {
@@ -68,8 +71,21 @@ class SessionController extends ChangeNotifier {
 
   SessionModel? currentSession; 
   
-  // --- Initialization & Setup ---
-  
+  // _activeFrameIndex: 0-9 for the 10 main frames. Set to 10 for game over.
+  int _activeFrameIndex = 0; 
+  // _activeShotIndex: 1, 2, or 3 (for the 10th frame)
+  int _activeShotIndex = 1; 
+
+  int get activeFrameIndex => _activeFrameIndex; 
+  int get activeShotIndex => _activeShotIndex; 
+
+  // Default selections for new shots
+  int defaultLane = 1;
+  int defaultBoard = 18;
+  int defaultBall = 1;
+  double defaultSpeed = 15.0;
+
+  // Initialize test data with a detailed first game
   Shot _createTestShot({
     required int shotNumber, 
     required int count, 
@@ -77,11 +93,10 @@ class SessionController extends ChangeNotifier {
     bool isFoul = false,
     String position = 'Pocket',
   }) {
-    // Correct parameter name: standingPins
     final leaveType = Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul);
     return Shot(
       shotNumber: shotNumber,
-      ball: 1, // Default to Ball 1
+      ball: 1,
       count: count,
       leaveType: leaveType,
       timestamp: DateTime.now().add(Duration(seconds: shotNumber)),
@@ -154,7 +169,7 @@ class SessionController extends ChangeNotifier {
     ));
 
 
-    // 3. Pad the rest of the game with empty frames up to 10
+    // Pad the rest of the game with empty frames up to 10
     int currentFrameCount = detailedFrames.length;
     final emptyFrames = List.generate(10 - currentFrameCount, (index) => Frame(
       frameNumber: index + currentFrameCount + 1,
@@ -162,18 +177,22 @@ class SessionController extends ChangeNotifier {
       shots: const [],
     ));
 
-    // 4. Create the Game object
+    //Create the Game object
     final testGame = Game(
       gameNumber: 1,
       frames: [...detailedFrames, ...emptyFrames],
       totalScore: 59, 
     );
     
-    // 5. Create the full test session
+    // Create the full test session
     final simpleGames = _createSimpleTestGames(6); 
     currentSession = SessionModel(
       games: [testGame, ...simpleGames], 
     );
+    
+    // Set active input position after initializing test data (Frame 4, Shot 1)
+    _activeFrameIndex = 3; 
+    _activeShotIndex = 1;
   }
   
   List<Game> _createSimpleTestGames(int count) {
@@ -194,22 +213,11 @@ class SessionController extends ChangeNotifier {
   void _initializeHardcodedSession() {
     _initializeTestData(); 
   }
-  
-  // --- Controller Methods ---
 
-  /// Finds the index of the first frame in the active game that is NOT complete.
-  int get activeFrameIndex {
-    final activeGame = currentSession?.games.first;
-    if (activeGame == null) return 0;
-    
-    final index = activeGame.frames.indexWhere((f) => !f.isComplete);
-    
-    // If all frames are complete, return the last frame index (9, for the 10th frame)
-    return index == -1 ? activeGame.frames.length - 1 : index;
-  }
-  
   void createNewSessionFromPacket(List<Game> parsedGames) {
     currentSession = SessionModel(games: parsedGames);
+    _activeFrameIndex = 0;
+    _activeShotIndex = 1;
     notifyListeners(); 
   }
 
@@ -223,7 +231,6 @@ class SessionController extends ChangeNotifier {
     required double speed,
     required int hitBoard,
     required int ball,
-    // Corrected parameter name
     required List<bool> standingPins, 
     required int pinsDownCount,
     required String position,
@@ -231,50 +238,145 @@ class SessionController extends ChangeNotifier {
   }) {
     // 1. Find the active Game and Frame
     final activeGame = currentSession?.games.first; 
-    final activeFrameIndex = activeGame?.frames.indexWhere((f) => !f.isComplete) ?? -1;
+    // Use the stored active index
+    final activeFrameIndexForUpdate = _activeFrameIndex;
 
-    if (activeGame != null && activeFrameIndex != -1) {
-      final oldFrame = activeGame.frames[activeFrameIndex];
-      
-      final globalShotNumber = activeGame.frames.fold<int>(0, (sum, f) => sum + f.shots.length) + 1;
+    // Check for game over state
+    if (activeGame == null || activeFrameIndexForUpdate >= 10) return;
 
-      // 2. Create the new Shot object
-      final newShot = Shot(
-        shotNumber: globalShotNumber,
-        ball: ball, 
-        count: pinsDownCount,
-        // Corrected parameter name
-        leaveType: Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul), 
-        timestamp: DateTime.now(),
-        position: position,
-        speed: speed,
-        hitBoard: hitBoard,
-      );
-
-      // 3. Create the new Frame (immutable update)
-      final newFrame = oldFrame.copyWithShot(newShot);
-      
-      // 4. Create the new Game (immutable update)
-      final newGame = activeGame.copyWithFrame(index: activeFrameIndex, newFrame: newFrame);
-      
-      // 5. Update the session
-      currentSession = SessionModel(
-        games: [newGame, ...currentSession!.games.skip(1)],
-      );
-    }
+    final oldFrame = activeGame.frames[activeFrameIndexForUpdate];
     
+    // Logger: print current active indices and shot counts before recording
+    try {
+      debugPrint('Recording shot - activeFrameIndex=$_activeFrameIndex, activeShotIndex=$_activeShotIndex');
+      for (var i = 0; i < activeGame.frames.length; i++) {
+        debugPrint('Game ${activeGame.gameNumber} Frame ${i + 1} shots=${activeGame.frames[i].shots.length}');
+      }
+    } catch (e) {
+      debugPrint('Diagnostic print failed: $e');
+    }
+
+    final globalShotNumber = activeGame.frames.fold<int>(0, (sum, f) => sum + f.shots.length) + 1;
+
+    // 2. Create the new Shot object
+    final newShot = Shot(
+      shotNumber: globalShotNumber,
+      ball: ball, 
+      count: pinsDownCount,
+      leaveType: Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul), 
+      timestamp: DateTime.now(),
+      position: position,
+      speed: speed,
+      hitBoard: hitBoard,
+    );
+
+    // 3. Create the new Frame (immutable update)
+    final newFrame = Frame(
+        frameNumber: oldFrame.frameNumber,
+        lane: lane, 
+        shots: [...oldFrame.shots, newShot],
+    );
+    
+    // 4. Create the new Game (immutable update)
+    final newGame = activeGame.copyWithFrame(index: activeFrameIndexForUpdate, newFrame: newFrame);
+    
+    // 5. Update the session
+    currentSession = SessionModel(
+      games: [newGame, ...currentSession!.games.skip(1)],
+    );
+
+    _advanceFrameAndShot(newFrame);
+
+    // Persist the user's last selections as global defaults for subsequent shots
+    defaultLane = lane;
+    defaultSpeed = speed;
+    defaultBoard = hitBoard;
+    defaultBall = ball;
+
+    // Logger: print shot info and frame shot counts after constructing newFrame/newGame but before assigning
+    try {
+      debugPrint('New shot created: shotNumber=$globalShotNumber, count=$pinsDownCount, position=$position, isFoul=$isFoul');
+      debugPrint('NewFrame shots count (will be): ${newFrame.shots.length} for frame ${newFrame.frameNumber}');
+    } catch (_) {}
+
+    // Build a nested JSON representation of the in-memory session (Session -> Games -> Frames -> Shots)
+    try {
+      final sessionMap = {
+        'sessionId': currentSession?.sessionId ?? '',
+        'games': currentSession!.games.map((g) => {
+              'gameNumber': g.gameNumber,
+              'totalScore': g.totalScore,
+              'frames': g.frames.map((f) => f.toJson()).toList(),
+            }).toList(),
+      };
+
+      // Logger: print the session JSON structure.
+      final pretty = const JsonEncoder.withIndent('  ').convert(sessionMap);
+      for (final line in pretty.split('\n')) {
+        debugPrint(line);
+      }
+      _saveSessionJsonToDocuments(pretty, filename: 'RevMetrix.json');
+      // Print per-game/frame shot counts to make it easy to see progress
+      for (var gi = 0; gi < currentSession!.games.length; gi++) {
+        final g = currentSession!.games[gi];
+        final frameShotCounts = g.frames.map((f) => f.shots.length).toList();
+        debugPrint('Game ${g.gameNumber} frame shot counts: $frameShotCounts');
+      }
+    } catch (e, st) {
+      debugPrint('Failed to build session JSON: $e\n$st');
+    }
+
     notifyListeners();
+  }
+
+  // Logic to determine the next input location (Frame/Shot)
+  void _advanceFrameAndShot(Frame newFrame) {
+    final frameNumber = newFrame.frameNumber;
+    final shotCount = newFrame.shots.length;
+    
+    // Logic for Frames 1 through 9 (index 0-8)
+    if (frameNumber < 10) {
+      if (newFrame.isComplete) {
+        // Frame is complete (Strike on shot 1, or two shots taken)
+        _activeFrameIndex++;
+        _activeShotIndex = 1;
+      } else {
+        // Not a strike on shot 1, move to shot 2 of the current frame
+        _activeShotIndex = 2; 
+      }
+    } 
+    // Logic for Frame 10 (index 9)
+    else if (frameNumber == 10) {
+      if (shotCount == 1) {
+        // First shot taken. Needs at least a second shot.
+        _activeShotIndex = 2;
+      } else if (shotCount == 2) {
+        // Check if a bonus shot is earned (Strike or Spare)
+        final totalPins = newFrame.totalPinsDown;
+        if (totalPins >= 10) {
+          // Strike or Spare, needs shot 3
+          _activeShotIndex = 3;
+        } else {
+          // Open frame (less than 10 pins in 2 shots), game is over
+          _activeFrameIndex = 10;
+          _activeShotIndex = 1;
+        }
+      } else if (shotCount == 3) {
+        // Third shot complete, game is over
+        _activeFrameIndex = 10; 
+        _activeShotIndex = 1;
+      }
+    }
   }
   
   /// Edits an existing shot in a frame by replacing the Shot object at a specific index.
   void editShot({
     required int frameIndex,
-    required int shotIndexInFrame, // 0-based index of the shot within the frame
+    required int shotIndexInFrame,
     required int lane,
     required double speed,
     required int hitBoard,
     required int ball,
-    // Corrected parameter name
     required List<bool> standingPins,
     required int pinsDownCount,
     required String position,
@@ -294,9 +396,8 @@ class SessionController extends ChangeNotifier {
           shotNumber: oldShot.shotNumber,
           ball: ball, 
           count: pinsDownCount,
-          // Corrected parameter name
           leaveType: Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul), 
-          timestamp: oldShot.timestamp, // Keep the original timestamp
+          timestamp: oldShot.timestamp,
           position: position,
           speed: speed,
           hitBoard: hitBoard,
@@ -321,11 +422,67 @@ class SessionController extends ChangeNotifier {
           games: [newGame, ...currentSession!.games.skip(1)],
         );
         
-        // NOTE: In a complete application, you must call a recalculateScores() method here.
+        try {
+          final sessionMap = {
+            'sessionId': currentSession?.sessionId ?? '',
+            'games': currentSession!.games.map((g) => {
+                  'gameNumber': g.gameNumber,
+                  'totalScore': g.totalScore,
+                  'frames': g.frames.map((f) => f.toJson()).toList(),
+                }).toList(),
+          };
+          final prettyEdit = const JsonEncoder.withIndent('  ').convert(sessionMap);
+          for (final line in prettyEdit.split('\n')) debugPrint(line);
+          _saveSessionJsonToDocuments(prettyEdit, filename: 'RevMetrix.json');
+        } catch (e, st) {
+          debugPrint('Failed to build session JSON after edit: $e\n$st');
+        }
       }
     }
     
     notifyListeners();
+  }
+
+  Future<void> _saveSessionJsonToDocuments(String pretty, {required String filename}) async {
+    // Try direct write to the shared Documents folder first (/storage/emulated/0/Documents)
+    try {
+      final directPath = '/storage/emulated/0/Documents';
+      final dir = Directory(directPath);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final file = File('$directPath/$filename');
+      await file.writeAsString(pretty, flush: true);
+      debugPrint('Session JSON saved to shared Documents: ${file.path}');
+      return;
+    } catch (e) {
+      debugPrint('Failed to write to shared Documents (/storage/emulated/0/Documents): $e');
+    }
+
+    // Try: app-specific external Documents (may still be visible under Android/data/.../files/Documents)
+    try {
+      final extDirs = await getExternalStorageDirectories(type: StorageDirectory.documents);
+      if (extDirs != null && extDirs.isNotEmpty) {
+        final externalDir = extDirs.first;
+        final file = File('${externalDir.path}/$filename');
+        await file.create(recursive: true);
+        await file.writeAsString(pretty, flush: true);
+        debugPrint('Session JSON saved to external Documents: ${file.path}');
+        return;
+      }
+    } catch (e) {
+      debugPrint('Failed to save to external Documents: $e');
+    }
+
+    // Fallback: write to the app documents directory (private) if all external writes fail
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/$filename');
+      await file.writeAsString(pretty, flush: true);
+      debugPrint('Session JSON saved to documents: ${file.path}');
+    } catch (e) {
+      debugPrint('Failed to save session JSON to documents: $e');
+    }
   }
   
   int get numOfGames {
@@ -336,3 +493,4 @@ class SessionController extends ChangeNotifier {
     notifyListeners(); 
   }
 }
+

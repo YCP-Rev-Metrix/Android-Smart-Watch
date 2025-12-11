@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/ble_manager.dart';
+import '../utils/ble_packet_test.dart';
 
 class DevSettingsPage extends StatefulWidget {
   const DevSettingsPage({super.key});
@@ -13,19 +14,31 @@ class DevSettingsPage extends StatefulWidget {
 class _DevSettingsPageState extends State<DevSettingsPage> {
   final ble = Get.find<BLEManager>();
 
+  void _handleSwipe(DragEndDetails details) {
+    // Calculate swipe velocity
+    final velocity = details.velocity.pixelsPerSecond.dx;
+    
+    // Swipe right if velocity is positive and significant
+    if (velocity > 300) {
+      Get.to(() => const BLEPacketTestWidget());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 8.0),
-          child: Column(
+    return GestureDetector(
+      onHorizontalDragEnd: _handleSwipe,
+      child: Scaffold(
+        backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 8.0),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 12),
 
-              // ---- Title ----
+              // Title 
               const Text(
                 "BLUETOOTH",
                 style: TextStyle(
@@ -37,7 +50,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
 
               const SizedBox(height: 12),
 
-              // ---- Connection Status ----
+              // Connection Status
               Obx(() {
                 final connected = ble.isConnected.value;
                 final addr = ble.connectedDeviceAddress.value;
@@ -68,7 +81,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
 
               const SizedBox(height: 14),
 
-              // ---- Buttons Row ----
+              // Buttons Row
               Row(
                 children: [
                   Expanded(
@@ -107,7 +120,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
 
                   const SizedBox(width: 6),
 
-                  // ---- SEND TEST JSON ----
+                  // Send Test JSON
                   Expanded(
                     child: SizedBox(
                       height: 32,
@@ -134,7 +147,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
 
               const SizedBox(height: 12),
 
-              // ---- JSON Output Box ----
+              // JSON Output Box
               Container(
                 width: 120,
                 height: 50, 
@@ -176,6 +189,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
           ),
         ),
       ),
+    ),
     );
   }
 }

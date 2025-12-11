@@ -1,15 +1,15 @@
 // models/shot.dart
 class Shot {
-  final int shotNumber; // (1 to N, overall shot of the session)
-  final int ball; // ball ID #
-  final int count; // # of pins knocked down (0-10)
-  final int leaveType; // bitmask: first 10 bits = pins (1=up, 0=down), 11th bit = foul (1=foul)
-  final String position; // where the ball hit the pocket (pocket quality)
+  final int shotNumber;
+  final int ball;
+  final int count;
+  final int leaveType;
+  final String position;
   final DateTime timestamp;
-  final double speed; // ball speed (mph)
-  final int hitBoard; // where the ball hit
+  final double speed;
+  final int hitBoard;
 
-  static const int foulBit = 1 << 10; // 11th bit for foul
+  static const int foulBit = 1 << 10;
 
   Shot({
     required this.shotNumber,
