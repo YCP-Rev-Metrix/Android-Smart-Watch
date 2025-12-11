@@ -7,7 +7,7 @@ class GameSession {
   DateTime? endTime;
   bool isComplete;
   int numOfGames;
-  List<String> balls; // array of ball names/ids
+  List<String> balls;
   List<Game> games;
 
   GameSession({
@@ -20,13 +20,13 @@ class GameSession {
     this.games = const [],
   });
 
-  // Factory now requires the sessionId passed in (e.g., from BLE)
+  // Factory requires the sessionId passed in (e.g., from BLE)
   factory GameSession.newSession(String sessionId) {
     return GameSession(
       sessionId: sessionId,
       startTime: DateTime.now(),
       numOfGames: 1,
-      balls: ['1', '2', '3'], // Example ball names/ids
+      balls: ['1', '2', '3'], 
       games: [Game.newGame(1)],
     );
   }

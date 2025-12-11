@@ -1,4 +1,4 @@
-// models/game.dart (MODIFIED)
+// models/game.dart
 
 import 'frame.dart';
 
@@ -6,15 +6,15 @@ class Game {
   final int gameNumber;
   int score;
   int startingLane;
-  List<int> lanes; // lanes used during the game
-  List<Frame> frames; // 12 frames: 9 regular + 3 for the 10th frame shots
+  List<int> lanes;
+  List<Frame> frames;
 
   Game({
     required this.gameNumber,
     this.score = 0,
     this.startingLane = 1,
     this.lanes = const [],
-    required this.frames, // Frames must be initialized
+    required this.frames,
   });
 
   factory Game.newGame(int gameNumber, {int startingLane = 1}) {
@@ -29,12 +29,11 @@ class Game {
     );
   }
 
-  // 🎯 MODIFIED: Finds the first frame where the 'shots' list is empty.
+  // Finds the first frame where the 'shots' list is empty.
   Frame? get currentFrame =>
       frames.firstWhere((f) => f.shots.isEmpty, orElse: () => frames.last);
 
-  // 🎯 MODIFIED: The game is complete if ALL frames are marked as 'isComplete'
-  // (which correctly checks for strikes/spares/2 shots in the Frame model).
+  // The game is complete if ALL frames are marked as 'isComplete'
   bool get isComplete => frames.every((f) => f.isComplete);
 
   Map<String, dynamic> toJson() => {

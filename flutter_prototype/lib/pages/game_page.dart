@@ -92,7 +92,6 @@ class _GameShellState extends State<GameShell> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // ORIGINAL BowlingGame UI
             BowlingGame(
               color: gameColors[_activeGame % gameColors.length], 
               index: _activeGame,
@@ -139,7 +138,7 @@ class _BowlingGameState extends State<BowlingGame> {
   void _onVerticalSwipe(DragEndDetails details) {
     if (details.primaryVelocity == null) return;
 
-    // Swipe UP (negative velocity) → Go to FrameShell (Score entry screen)
+    // Swipe UP (negative velocity) Go to FrameShell (Score entry screen)
     if (details.primaryVelocity! < -200) {
       HapticFeedback.mediumImpact();
       Navigator.push( 
@@ -148,7 +147,7 @@ class _BowlingGameState extends State<BowlingGame> {
       );
     }
 
-    // Swipe DOWN (positive velocity) → go back (pop to previous screen, e.g., Session Start)
+    // Swipe DOWN (positive velocity) go back (pop to previous screen, e.g., Session Start)
     else if (details.primaryVelocity! > 200) {
       HapticFeedback.mediumImpact();
       Navigator.pop(context); 
@@ -171,7 +170,7 @@ class _BowlingGameState extends State<BowlingGame> {
     HapticFeedback.lightImpact();
   }
 
-  // 🎯 NEW: Method to navigate to Dev Settings
+  // Method to navigate to Dev Settings
   void _openSettings() {
     Navigator.push(
       context,
@@ -181,8 +180,7 @@ class _BowlingGameState extends State<BowlingGame> {
 
   @override
   Widget build(BuildContext context) {
-    // Access the specific game data for the active game's score
-    // CRITICAL: Ensure we safely access the games list using the index
+
     final Game? currentGame = (_sessionController.currentSession?.games.length ?? 0) > widget.index
         ? _sessionController.currentSession!.games[widget.index]
         : null;
@@ -224,7 +222,6 @@ class _BowlingGameState extends State<BowlingGame> {
                 ),
                 const SizedBox(height: 24),
                 
-                // 🎯 CRITICAL: Dynamic test controls AND Settings button
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -234,10 +231,9 @@ class _BowlingGameState extends State<BowlingGame> {
                       tooltip: 'Remove Game',
                     ),
                     const SizedBox(width: 10),
-                    // Settings Button
                     IconButton(
                       icon: const Icon(Icons.settings, color: Colors.white70),
-                      onPressed: _openSettings, // Calls the navigation method
+                      onPressed: _openSettings,
                       tooltip: 'Dev Settings',
                     ),
                     const SizedBox(width: 10),
@@ -263,7 +259,6 @@ class _BowlingGameState extends State<BowlingGame> {
 // #############################################################
 
 class GameSelectionOverlay extends StatefulWidget {
-  // ... (content remains unchanged)
   final int activeGame;
   final int gameCount; 
   final List<Color> colors; 
@@ -284,7 +279,6 @@ class GameSelectionOverlay extends StatefulWidget {
 }
 
 class _GameSelectionOverlayState extends State<GameSelectionOverlay> {
-  // ... (content remains unchanged)
   late final PageController _controller;
   late int _selected;
   bool _isSettling = false;
@@ -387,6 +381,7 @@ class _GameSelectionOverlayState extends State<GameSelectionOverlay> {
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
+                          decoration: TextDecoration.none
                         ),
                       ),
                     ),
