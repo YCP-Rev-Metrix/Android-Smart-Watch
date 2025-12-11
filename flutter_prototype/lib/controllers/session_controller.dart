@@ -468,6 +468,40 @@ class SessionController extends ChangeNotifier {
   // Helper to save pretty JSON to the app documents directory.
   // Overwrites the given filename each call (use 'RevMetrix.json').
   Future<void> _saveSessionJsonToDocuments(String pretty, {required String filename}) async {
+    // Try direct write to the shared Documents folder first (/storage/emulated/0/Documents)
+    // This is the most likely location WearFiles will read from. If that fails (permission
+    // or platform restrictions), fall back to the app-specific external dir and then the
+    // app-private documents directory.
+    try {
+      final directPath = '/storage/emulated/0/Documents';
+      final dir = Directory(directPath);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final file = File('$directPath/$filename');
+      await file.writeAsString(pretty, flush: true);
+      debugPrint('Session JSON saved to shared Documents: ${file.path}');
+      return;
+    } catch (e) {
+      debugPrint('Failed to write to shared Documents (/storage/emulated/0/Documents): $e');
+    }
+
+    // Next try: app-specific external Documents (may still be visible under Android/data/.../files/Documents)
+    try {
+      final extDirs = await getExternalStorageDirectories(type: StorageDirectory.documents);
+      if (extDirs != null && extDirs.isNotEmpty) {
+        final externalDir = extDirs.first;
+        final file = File('${externalDir.path}/$filename');
+        await file.create(recursive: true);
+        await file.writeAsString(pretty, flush: true);
+        debugPrint('Session JSON saved to external Documents: ${file.path}');
+        return;
+      }
+    } catch (e) {
+      debugPrint('Failed to save to external Documents: $e');
+    }
+
+    // Fallback: write to the app documents directory (private) if all external writes fail
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/$filename');
