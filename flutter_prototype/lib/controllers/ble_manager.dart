@@ -177,6 +177,62 @@ class BLEManager extends GetxController {
       print('Failed to start foreground service: $e');
     }
   }
+  
+  Future<void> sendRawBLEPacket(List<int> bytes) async {
+    try {
+      await _channel.invokeMethod('sendNotification', {
+        'serviceUuid': BleGattManagerConstants.serviceUuid,
+        'charUuid': BleGattManagerConstants.notifyUuid,
+        'bytes': bytes,
+      });
+      print('BLEManager.sendRawBLEPacket -> sent ${bytes.length} bytes');
+    } catch (e) {
+      print('sendRawBLEPacket error: $e');
+      rethrow;
+    }
+  }
+
+  /// Send a JSON object in small chunks via BLE, Each chunk is up to 20 bytes, sent one at a time with 50ms delay
+  Future<void> sendJsonInChunks(Map<String, dynamic> jsonObj) async {
+    try {
+      final jsonString = json.encode(jsonObj);
+      final bytes = utf8.encode(jsonString);
+      
+      print('BLEManager.sendJsonInChunks: Sending ${bytes.length} bytes in chunks');
+      
+      const chunkSize = 20; 
+      final totalChunks = (bytes.length + chunkSize - 1) ~/ chunkSize;
+      
+      for (int i = 0; i < bytes.length; i += chunkSize) {
+        final end = (i + chunkSize <= bytes.length) ? i + chunkSize : bytes.length;
+        final chunk = bytes.sublist(i, end);
+        
+        await sendRawBLEPacket(chunk);
+        print('BLEManager: Sent chunk ${(i ~/ chunkSize) + 1}/$totalChunks (${chunk.length} bytes)');
+        
+        // Delay between chunks so phone can process
+        if (i + chunkSize < bytes.length) {
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
+      }
+      
+      print('BLEManager.sendJsonInChunks: Complete!');
+    } catch (e) {
+      print('sendJsonInChunks error: $e');
+      rethrow;
+    }
+  }
+  
+  Future<void> sendRecordingCommand(String cmd) async {
+  await sendJsonToPhone({"cmd": cmd});
+  }
+  Future<void> startRecording() async {
+    await sendRecordingCommand("startRec");
+  }
+
+  Future<void> stopRecording() async {
+    await sendRecordingCommand("stopRec");
+  }
 
 }
 
