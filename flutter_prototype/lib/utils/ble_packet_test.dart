@@ -146,28 +146,28 @@ class _BLEPacketTestWidgetState extends State<BLEPacketTestWidget> {
       _isSending = true;
     });
     
-    print('📤 [BLE Test] Button pressed, minimal=$minimal');
+    print('[BLE Test] Button pressed, minimal=$minimal');
     
     try {
-      print('📤 [BLE Test] Creating session...');
+      print('[BLE Test] Creating session...');
       final session = minimal
           ? BLEPacketTestUtil.createMinimalTestSession()
           : BLEPacketTestUtil.createTestSession();
       
-      print('📤 [BLE Test] Session created:');
+      print('[BLE Test] Session created:');
       print('   Session ID: ${session.sessionId}');
       print('   Games: ${session.games.length}');
       print('   Balls: ${session.balls}');
       
-      print('📤 [BLE Test] Converting to JSON...');
+      print('[BLE Test] Converting to JSON...');
       final json = session.toJson();
-      print('📤 [BLE Test] JSON created, calling sendJsonInChunks...');
+      print('[BLE Test] JSON created, calling sendJsonInChunks...');
       
       await _ble.sendJsonInChunks(json);
       
-      print('📤 [BLE Test] Transmission complete!');
+      print('[BLE Test] Transmission complete!');
     } catch (e) {
-      print('❌ [BLE Test] Error: $e');
+      print('[BLE Test] Error: $e');
       print(e);
     } finally {
       setState(() => _isSending = false);
