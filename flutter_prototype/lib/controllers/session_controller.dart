@@ -1,5 +1,7 @@
 // lib/controllers/session_controller.dart
 
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; // Added for ChangeNotifier
 import '../models/frame.dart'; 
@@ -261,6 +263,16 @@ class SessionController extends ChangeNotifier {
 
     final oldFrame = activeGame.frames[activeFrameIndexForUpdate];
     
+    // Diagnostic: print current active indices and shot counts before recording
+    try {
+      debugPrint('Recording shot - activeFrameIndex=$_activeFrameIndex, activeShotIndex=$_activeShotIndex');
+      for (var i = 0; i < activeGame.frames.length; i++) {
+        debugPrint('Game ${activeGame.gameNumber} Frame ${i + 1} shots=${activeGame.frames[i].shots.length}');
+      }
+    } catch (e) {
+      debugPrint('Diagnostic print failed: $e');
+    }
+
     final globalShotNumber = activeGame.frames.fold<int>(0, (sum, f) => sum + f.shots.length) + 1;
 
     // 2. Create the new Shot object
@@ -299,6 +311,52 @@ class SessionController extends ChangeNotifier {
     defaultSpeed = speed;
     defaultBoard = hitBoard;
     defaultBall = ball;
+
+    // Diagnostic: print shot info and frame shot counts after constructing newFrame/newGame but before assigning
+    try {
+      debugPrint('New shot created: shotNumber=$globalShotNumber, count=$pinsDownCount, position=$position, isFoul=$isFoul');
+      debugPrint('NewFrame shots count (will be): ${newFrame.shots.length} for frame ${newFrame.frameNumber}');
+    } catch (_) {}
+
+    // Build a nested JSON representation of the in-memory session (Session -> Games -> Frames -> Shots)
+    try {
+      final sessionMap = {
+        'sessionId': currentSession?.sessionId ?? '',
+        'games': currentSession!.games.map((g) => {
+              'gameNumber': g.gameNumber,
+              'totalScore': g.totalScore,
+              'frames': g.frames.map((f) => f.toJson()).toList(),
+            }).toList(),
+      };
+
+      // Pretty-print JSON (multi-line) and print each line separately to avoid truncation by
+      // platform loggers that cut long single-line messages.
+      final pretty = const JsonEncoder.withIndent('  ').convert(sessionMap);
+      for (final line in pretty.split('\n')) {
+        debugPrint(line);
+      }
+      // Also save the pretty JSON to a timestamped file in the system temp directory
+      try {
+        final now = DateTime.now();
+        final filename = 'session_${now.toIso8601String().replaceAll(':', '_')}.json';
+        final file = File('${Directory.systemTemp.path}/$filename');
+        file.writeAsString(pretty).then((_) {
+          debugPrint('Session JSON saved to: ${file.path}');
+        }).catchError((e) {
+          debugPrint('Failed to save session JSON: $e');
+        });
+      } catch (e) {
+        debugPrint('Failed to schedule session JSON save: $e');
+      }
+      // Additionally print per-game/frame shot counts to make it easy to see progress
+      for (var gi = 0; gi < currentSession!.games.length; gi++) {
+        final g = currentSession!.games[gi];
+        final frameShotCounts = g.frames.map((f) => f.shots.length).toList();
+        debugPrint('Game ${g.gameNumber} frame shot counts: $frameShotCounts');
+      }
+    } catch (e, st) {
+      debugPrint('Failed to build session JSON: $e\n$st');
+    }
 
     notifyListeners();
   }
@@ -399,6 +457,33 @@ class SessionController extends ChangeNotifier {
         );
         
         // NOTE: In a complete application, you must call a recalculateScores() method here.
+        // After editing, also print the full session JSON so changes are visible in the console.
+        try {
+          final sessionMap = {
+            'sessionId': currentSession?.sessionId ?? '',
+            'games': currentSession!.games.map((g) => {
+                  'gameNumber': g.gameNumber,
+                  'totalScore': g.totalScore,
+                  'frames': g.frames.map((f) => f.toJson()).toList(),
+                }).toList(),
+          };
+          final prettyEdit = const JsonEncoder.withIndent('  ').convert(sessionMap);
+          for (final line in prettyEdit.split('\n')) debugPrint(line);
+          try {
+            final now = DateTime.now();
+            final filename = 'session_edit_${now.toIso8601String().replaceAll(':', '_')}.json';
+            final file = File('${Directory.systemTemp.path}/$filename');
+            file.writeAsString(prettyEdit).then((_) {
+              debugPrint('Session JSON (edit) saved to: ${file.path}');
+            }).catchError((e) {
+              debugPrint('Failed to save session JSON (edit): $e');
+            });
+          } catch (e) {
+            debugPrint('Failed to schedule session JSON (edit) save: $e');
+          }
+        } catch (e, st) {
+          debugPrint('Failed to build session JSON after edit: $e\n$st');
+        }
       }
     }
     
