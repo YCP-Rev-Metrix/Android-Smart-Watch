@@ -59,7 +59,7 @@ class BLEPacketTestUtil {
       score: game.score,
       startingLane: game.startingLane,
       lanes: game.lanes,
-      frames: [...game.frames.sublist(0, 3).asMap().entries.map((e) => updatedFrames[e.key]).toList(), ...game.frames.sublist(3)],
+      frames: [...game.frames.sublist(0, 3).asMap().entries.map((e) => updatedFrames[e.key]), ...game.frames.sublist(3)],
     );
     
     // Replace the game in the session
@@ -129,9 +129,9 @@ class BLEPacketTestWidget extends StatefulWidget {
   final bool useMinimalSession;
   
   const BLEPacketTestWidget({
-    Key? key,
+    super.key,
     this.useMinimalSession = false,
-  }) : super(key: key);
+  });
 
   @override
   State<BLEPacketTestWidget> createState() => _BLEPacketTestWidgetState();

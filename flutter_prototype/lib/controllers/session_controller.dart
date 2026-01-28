@@ -432,7 +432,9 @@ class SessionController extends ChangeNotifier {
                 }).toList(),
           };
           final prettyEdit = const JsonEncoder.withIndent('  ').convert(sessionMap);
-          for (final line in prettyEdit.split('\n')) debugPrint(line);
+          for (final line in prettyEdit.split('\n')) {
+            debugPrint(line);
+          }
           _saveSessionJsonToDocuments(prettyEdit, filename: 'RevMetrix.json');
         } catch (e, st) {
           debugPrint('Failed to build session JSON after edit: $e\n$st');
