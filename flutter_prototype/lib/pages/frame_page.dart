@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'game_page.dart'; 
 import 'shot_page.dart'; 
+import 'shot_input_page.dart';
 import '../controllers/session_controller.dart'; 
 
 // Global access to the controller
@@ -120,7 +121,7 @@ class _FrameShellState extends State<FrameShell> {
 					child: GestureDetector(
 						onLongPress: _enterFrameSelection,
 						onVerticalDragEnd: _onVerticalSwipe,
-						behavior: HitTestBehavior.opaque,
+						behavior: HitTestBehavior.translucent,
 						child: Stack(
 							fit: StackFit.expand,
 							children: [
@@ -243,35 +244,39 @@ class _BowlingFrameState extends State<BowlingFrame> {
 			: const NeverScrollableScrollPhysics();
 
 
-		return PageView.builder(
-			controller: _controller,
-			physics: scrollPhysics,
-			itemCount: itemCount,
-			itemBuilder: (context, pageIndex) { 
-				
-				final shotIndex = pageIndex;
-				
-				// Calculate the starting global shot number for this PageView
-				final shotsBeforeFrame = activeGame.frames
-					.take(widget.frameIndex)
-					.fold(0, (sum, f) => sum + f.shots.length);
-				final initialGlobalShot = shotsBeforeFrame + 1;
-				
-				final bool isCurrentInput = widget.isInputActive && (pageIndex == frame.shots.length);
-				
-				if (!widget.isInputActive && pageIndex >= frame.shots.length) {
-					return Container(color: widget.color);
-				}
-				
-				return BowlingShot(
-					key: ValueKey('${widget.frameIndex}-${shotIndex + 1}'),
-					color: widget.color,
-					frameIndex: widget.frameIndex,
-					shotIndex: shotIndex + 1,
-					globalShotNumber: initialGlobalShot + shotIndex,
-					isInputActive: isCurrentInput,
-				);
-			},
+		return Stack(
+			children: [
+				PageView.builder(
+					controller: _controller,
+					physics: scrollPhysics,
+					itemCount: itemCount,
+					itemBuilder: (context, pageIndex) { 
+						
+						final shotIndex = pageIndex;
+						
+						// Calculate the starting global shot number for this PageView
+						final shotsBeforeFrame = activeGame.frames
+							.take(widget.frameIndex)
+							.fold(0, (sum, f) => sum + f.shots.length);
+						final initialGlobalShot = shotsBeforeFrame + 1;
+						
+						final bool isCurrentInput = widget.isInputActive && (pageIndex == frame.shots.length);
+						
+						if (!widget.isInputActive && pageIndex >= frame.shots.length) {
+							return Container(color: widget.color);
+						}
+						
+						return BowlingShot(
+							key: ValueKey('${widget.frameIndex}-${shotIndex + 1}'),
+							color: widget.color,
+							frameIndex: widget.frameIndex,
+							shotIndex: shotIndex + 1,
+							globalShotNumber: initialGlobalShot + shotIndex,
+							isInputActive: isCurrentInput,
+						);
+					},
+				),
+			],
 		);
 	}
 }
@@ -657,7 +662,7 @@ class _BowlingShotState extends State<BowlingShot> {
 					_buildDivider(),
 					_buildInfoCell('Speed', speed.toStringAsFixed(1)),
 					_buildDivider(),
-					_buildInfoCell('Ball', '1'),
+					_buildInfoCell('Ball', ball.toString()),
 				],
 			),
 		);
@@ -701,42 +706,72 @@ class _BowlingShotState extends State<BowlingShot> {
 			backgroundColor: widget.color,
 			extendBodyBehindAppBar: true,
 			body: Center(
-				child: GestureDetector(
-					onTap: _openShotPage,
-					child: Container(
-						width: 280,
-						height: 280,
-						decoration: BoxDecoration(
-							color: widget.color,
-							shape: BoxShape.circle,
-						),
-						child: Column(
-							mainAxisAlignment: MainAxisAlignment.start,
-							children: [
-								const SizedBox(height: 24),
-								Text(
-									'Frame $displayFrameNumber — Shot ${widget.shotIndex}',
-									style: const TextStyle(
-										color: Colors.white,
-										fontSize: 14,
-										fontWeight: FontWeight.bold,
+				child: Container(
+					width: 280,
+					height: 280,
+					decoration: BoxDecoration(
+						color: widget.color,
+						shape: BoxShape.circle,
+					),
+					child: Column(
+						mainAxisAlignment: MainAxisAlignment.start,
+						children: [
+							const SizedBox(height: 24),
+							Text(
+								'Frame $displayFrameNumber — Shot ${widget.shotIndex}',
+								style: const TextStyle(
+									color: Colors.white,
+									fontSize: 14,
+									fontWeight: FontWeight.bold,
+								),
+							),
+							const SizedBox(height: 12),
+							GestureDetector(
+								onTap: _openShotPage,
+								child: _buildPinDisplay(pinsDown),
+							),
+							const SizedBox(height: 6),
+							GestureDetector(
+								onTap: null,
+								child: Transform.scale(
+									scale: 0.8,
+									child: Stack(
+										children: [
+											_buildInfoBar(lane, board, speed, ball),
+											Positioned.fill(
+												child: ElevatedButton(
+													onPressed: () {
+														Navigator.push(
+															context,
+															MaterialPageRoute(builder: (_) => ShotInputPage(
+																initialPins: List.filled(10, true),
+																shotNumber: widget.globalShotNumber,
+																frameShotIndex: widget.shotIndex,
+																initialLane: lane,
+																initialBoard: board,
+																initialBall: ball,
+																initialSpeed: speed,
+																startInPost: false,
+																initialIsFoul: false,
+															)),
+														);
+													},
+													style: ElevatedButton.styleFrom(
+														backgroundColor: Colors.black,
+														foregroundColor: Colors.white,
+														elevation: 0,
+														shape: const RoundedRectangleBorder(
+															borderRadius: BorderRadius.zero,
+														),
+													),
+													child: const Text('New Shot Input'),
+												),
+											),
+										],
 									),
 								),
-								const SizedBox(height: 12),
-								_buildPinDisplay(pinsDown),
-								const SizedBox(height: 6),
-
-
-								GestureDetector(
-									onTap: null,
-									child: Transform.scale(
-										scale: 0.8,
-										child: _buildInfoBar(lane, board, speed, ball),
-									),
-								),
-							
-							],
-						),
+							),
+						],
 					),
 				),
 			),
