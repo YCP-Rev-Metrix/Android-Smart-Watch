@@ -269,39 +269,16 @@ class _ShotInputPageState extends State<ShotInputPage> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 0),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        SizedBox(
-                          height: 80,
-                          child: ListWheelScrollView(
-                            itemExtent: 20,
-                            diameterRatio: 1.5,
-                            onSelectedItemChanged: (index) {
-                              setState(() {
-                                _selectedBall = index + 1;
-                              });
+                        Expanded(
+                          child: _buildVerticalListPicker(
+                            items: List.generate(4, (i) => 'Ball ${i + 1}'),
+                            selectedIndex: _selectedBall - 1,
+                            onSelectionChanged: (index) {
+                              setState(() => _selectedBall = index + 1);
                             },
-                            children: List.generate(4, (index) => Container(
-                              color: index == _selectedBall - 1 ? Colors.white : Colors.transparent,
-                              child: Center(
-                                child: Text(
-                                  'Ball ${index + 1}',
-                                  style: TextStyle(
-                                    color: index == _selectedBall - 1 ? Colors.black : Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            )),
-                          ),
-                        ),
-                        const SizedBox(height: 15),
-                        Text(
-                          'Selected: Ball $_selectedBall',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
+                            labelFormatter: (index) => 'Ball ${index + 1}',
                           ),
                         ),
                       ],
@@ -499,39 +476,17 @@ class _ShotInputPageState extends State<ShotInputPage> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 0),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        SizedBox(
-                          height: 80,
-                          child: ListWheelScrollView(
-                            itemExtent: 20,
-                            diameterRatio: 1.5,
-                            onSelectedItemChanged: (index) {
-                              setState(() {
-                                _selectedBoard = index;
-                              });
+                        Expanded(
+                          child: _buildVerticalListPicker(
+                            items: _boardOptions,
+                            selectedIndex: _selectedBoard,
+                            onSelectionChanged: (index) {
+                              setState(() => _selectedBoard = index);
                             },
-                            children: List.generate(_boardOptions.length, (index) => Container(
-                              color: index == _selectedBoard ? Colors.white : Colors.transparent,
-                              child: Center(
-                                child: Text(
-                                  _boardOptions[index],
-                                  style: TextStyle(
-                                    color: index == _selectedBoard ? Colors.black : Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            )),
-                          ),
-                        ),
-                        const SizedBox(height: 15),
-                        Text(
-                          'Selected: ${_boardOptions[_selectedBoard]}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
+                            labelFormatter: (index) => _boardOptions[index],
+                            itemHeight: 60,
                           ),
                         ),
                       ],
@@ -562,41 +517,8 @@ class _ShotInputPageState extends State<ShotInputPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        SizedBox(
-                          height: 50,
-                          child: ListView.builder(
-                            controller: _speedScrollController,
-                            scrollDirection: Axis.horizontal,
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: _speedOptions.length,
-                            itemBuilder: (context, index) {
-                              final speed = _speedOptions[index];
-                              final isSelected = speed == _selectedSpeed;
-                              return Container(
-                                width: 50,
-                                color: Colors.transparent,
-                                child: Center(
-                                  child: Text(
-                                    speed.toStringAsFixed(1),
-                                    style: TextStyle(
-                                      color: isSelected ? Colors.white : Colors.grey,
-                                      fontSize: isSelected ? 14 : 12,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
+                        _buildHorizontalSpeedPicker(scale: 2.5),
                         const SizedBox(height: 15),
-                        Text(
-                          'Selected: ${_selectedSpeed.toStringAsFixed(1)} mph',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -689,7 +611,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
                           Text(
                             'Last 3 Boards',
                             style: TextStyle(
-                              color: Colors.grey[400],
+                              color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                             ),
@@ -710,7 +632,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
                           Text(
                             'Last 3 Stances',
                             style: TextStyle(
-                              color: Colors.grey[400],
+                              color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                             ),
@@ -751,6 +673,211 @@ class _ShotInputPageState extends State<ShotInputPage> {
               ],
             );
           }
+        },
+      ),
+    );
+  }
+
+  Widget _buildHorizontalSpeedPicker({double scale = 1.0}) {
+    const double itemWidth = 80;
+    final controller = ScrollController(initialScrollOffset: 0);
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 2.0 * scale),
+      child: Column(
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final visibleWidth = constraints.maxWidth;
+
+              void centerOnValue(int index) {
+                final targetOffset = (index * itemWidth) - (visibleWidth / 2) + (itemWidth / 2);
+                controller.animateTo(
+                  targetOffset.clamp(
+                    controller.position.minScrollExtent,
+                    controller.position.maxScrollExtent,
+                  ),
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOut,
+                );
+              }
+
+              final values = List<int>.generate(351, (i) => i + 50);
+              final currentValue = (_selectedSpeed * 10).round().clamp(values.first, values.last);
+
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final idx = ((_selectedSpeed * 10).round() - values.first);
+                centerOnValue(idx.clamp(0, values.length - 1));
+              });
+
+              return Container(
+                height: 28 * scale,
+                width: constraints.maxWidth,
+                decoration: const BoxDecoration(),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6 * scale),
+                  child: ShaderMask(
+                    shaderCallback: (rect) {
+                      return const LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Colors.transparent,
+                          Colors.white,
+                          Colors.white,
+                          Colors.transparent,
+                        ],
+                        stops: [0.0, 0.12, 0.88, 1.0],
+                      ).createShader(rect);
+                    },
+                    blendMode: BlendMode.dstIn,
+                    child: ListView.builder(
+                      controller: controller,
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: values.length,
+                      itemBuilder: (context, i) {
+                        final isSelected = values[i] == currentValue;
+
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() => _selectedSpeed = values[i] / 10.0);
+                            centerOnValue(i);
+                          },
+                          child: Container(
+                            width: itemWidth,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              border: Border(
+                                right: BorderSide(
+                                  color: Colors.black.withOpacity(0.2),
+                                  width: 0.8,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              (values[i] / 10.0).toStringAsFixed(1),
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.black.withOpacity(0.80),
+                                fontSize: isSelected ? 30 : 20,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerticalListPicker({
+    required List<String> items,
+    required int selectedIndex,
+    required Function(int) onSelectionChanged,
+    required String Function(int) labelFormatter,
+    double itemHeight = 60,
+  }) {
+    final controller = ScrollController(initialScrollOffset: 0);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final visibleHeight = constraints.maxHeight;
+
+          void centerOnValue(int index) {
+            final targetOffset = (index * itemHeight) - (visibleHeight / 2) + (itemHeight / 2);
+            controller.animateTo(
+              targetOffset.clamp(
+                controller.position.minScrollExtent,
+                controller.position.maxScrollExtent,
+              ),
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+            );
+          }
+
+          final currentValue = selectedIndex;
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            centerOnValue(selectedIndex + 1); // +1 for top padding
+          });
+
+          return Container(
+            height: constraints.maxHeight,
+            width: constraints.maxWidth,
+            decoration: const BoxDecoration(),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: ShaderMask(
+                shaderCallback: (rect) {
+                  return const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.white,
+                      Colors.white,
+                      Colors.transparent,
+                    ],
+                    stops: [0.0, 0.12, 0.88, 1.0],
+                  ).createShader(rect);
+                },
+                blendMode: BlendMode.dstIn,
+                child: ListView.builder(
+                  controller: controller,
+                  scrollDirection: Axis.vertical,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: items.length + 2,
+                  itemBuilder: (context, i) {
+                    // Add padding at top
+                    if (i == 0) {
+                      return SizedBox(height: itemHeight);
+                    }
+                    // Add padding at bottom
+                    if (i == items.length + 1) {
+                      return SizedBox(height: itemHeight);
+                    }
+                    
+                    final itemIndex = i - 1;
+                    final isSelected = itemIndex == currentValue;
+
+                    return GestureDetector(
+                      onTap: () {
+                        onSelectionChanged(itemIndex);
+                        centerOnValue(i);
+                      },
+                      child: Container(
+                        height: itemHeight,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.black.withOpacity(0.2),
+                              width: 0.8,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          labelFormatter(itemIndex),
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.black.withOpacity(0.80),
+                            fontSize: isSelected ? 18 : 14,
+                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
         },
       ),
     );
