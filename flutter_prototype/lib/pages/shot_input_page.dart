@@ -204,12 +204,12 @@ class _ShotInputPageState extends State<ShotInputPage> {
    } else if (widget.frameShotIndex == 1) {
      // Shot 1
      pinColor = isSelected 
-       ? const Color.fromRGBO(142, 124, 195, 1) // purple - selected as standing
+       ? const Color.fromRGBO(152, 124, 229, 1) // purple - selected as standing
        : const Color.fromRGBO(119, 136, 153, 1); // light slate grey - will be knocked down
    } else {
      // Shot 2
      pinColor = isSelected 
-       ? const Color.fromRGBO(220, 80, 80, 1) // red - selected as standing after shot 2
+       ? const Color.fromARGB(255, 255, 0, 0) // red - selected as standing after shot 2
        : const Color.fromRGBO(142, 124, 195, 1); // purple - available from shot 1
    }
 
