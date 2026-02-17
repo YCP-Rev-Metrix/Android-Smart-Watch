@@ -4,7 +4,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'game_page.dart'; 
-import 'shot_page.dart'; 
 import 'shot_input_page.dart';
 import '../controllers/session_controller.dart'; 
 
@@ -534,7 +533,7 @@ class _BowlingShotState extends State<BowlingShot> {
 		final shotResult = await Navigator.push<Map<String, dynamic>>(
 			context,
 			MaterialPageRoute(
-				builder: (_) => ShotPage(
+				builder: (_) => ShotInputPage(
 					initialPins: initialPinsStanding,
 					shotNumber: widget.globalShotNumber,
 					frameShotIndex: widget.shotIndex,
@@ -731,45 +730,9 @@ class _BowlingShotState extends State<BowlingShot> {
 								child: _buildPinDisplay(pinsDown),
 							),
 							const SizedBox(height: 6),
-							GestureDetector(
-								onTap: null,
-								child: Transform.scale(
-									scale: 0.8,
-									child: Stack(
-										children: [
-											_buildInfoBar(lane, board, speed, ball),
-											Positioned.fill(
-												child: ElevatedButton(
-													onPressed: () {
-														Navigator.push(
-															context,
-															MaterialPageRoute(builder: (_) => ShotInputPage(
-																initialPins: List.filled(10, true),
-																shotNumber: widget.globalShotNumber,
-																frameShotIndex: widget.shotIndex,
-																initialLane: lane,
-																initialBoard: board,
-																initialBall: ball,
-																initialSpeed: speed,
-																startInPost: false,
-																initialIsFoul: false,
-															)),
-														);
-													},
-													style: ElevatedButton.styleFrom(
-														backgroundColor: Colors.black,
-														foregroundColor: Colors.white,
-														elevation: 0,
-														shape: const RoundedRectangleBorder(
-															borderRadius: BorderRadius.zero,
-														),
-													),
-													child: const Text('New Shot Input'),
-												),
-											),
-										],
-									),
-								),
+							Transform.scale(
+								scale: 0.8,
+								child: _buildInfoBar(lane, board, speed, ball),
 							),
 						],
 					),

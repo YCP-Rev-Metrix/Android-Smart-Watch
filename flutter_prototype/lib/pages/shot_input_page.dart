@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
+import 'dart:async';
+import '../controllers/ble_manager.dart';
 
 class ShotInputPage extends StatefulWidget {
   final List<bool> initialPins;
@@ -34,12 +37,16 @@ class _ShotInputPageState extends State<ShotInputPage> {
   int _currentPage = 0;
   int _selectedBall = 1;
   int _selectedBoard = 0;
+  bool isFoul = false;
   double _selectedSpeed = 15.0;
   late List<bool> _selectedPins;
   String? _selectedOutcome;
   bool _isRecording = false;
+  Timer? _recordingTimer;
   double _selectedStance = 20.0;
   int _selectedLane = 1;
+  double _sliderPos = 20;
+  int get _stance => 40 - _sliderPos.round();
 
   // Demo data for recent results
   final List<String> _recentBoards = ['Right', 'Light Pocket', 'Pocket'];
@@ -75,13 +82,24 @@ class _ShotInputPageState extends State<ShotInputPage> {
   @override
   void initState() {
     super.initState();
-    _selectedPins = List.from(widget.initialPins);
+    // Start with no pins selected (all knocked down by default)
+    // User will select the pins they LEFT STANDING
+    _selectedPins = List.filled(10, false);
     _speedScrollController = ScrollController();
     _speedScrollController.addListener(_onSpeedScroll);
+    
+    // Initialize from widget parameters
+    _selectedBall = widget.initialBall;
+    _selectedBoard = widget.initialBoard;
+    _selectedLane = widget.initialLane;
+    _selectedSpeed = widget.initialSpeed;
+    if (widget.initialIsFoul == true) {
+      isFoul = true;
+    }
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Scroll to the initial speed (15.0 is at index 50) after the view is built
+      // Scroll to the initial speed after the view is built
       if (_speedScrollController.hasClients) {
-        // Center the view so 15.0 is in the middle of the screen
         final itemCenterOffset = (50 * 50.0) + 25; // Center of the 50th item
         final screenCenterOffset = itemCenterOffset - (_speedScrollController.position.viewportDimension / 2);
         _speedScrollController.jumpTo(screenCenterOffset);
@@ -91,7 +109,9 @@ class _ShotInputPageState extends State<ShotInputPage> {
 
   void _togglePin(int index) {
     setState(() {
-      if (widget.initialPins[index]) {
+      // Shot 1: all pins can be toggled
+      // Shot 2: only pins that were standing after shot 1 can be toggled
+      if (widget.frameShotIndex == 1 || widget.initialPins[index]) {
         _selectedPins[index] = !_selectedPins[index];
       }
     });
@@ -100,10 +120,23 @@ class _ShotInputPageState extends State<ShotInputPage> {
   void _selectOutcome(String outcome) {
     setState(() {
       _selectedOutcome = _selectedOutcome == outcome ? null : outcome;
+      isFoul = false; // Clear foul state when selecting strike/spare
       if (_selectedOutcome == 'X' || _selectedOutcome == '/') {
+        // Strike/Spare: ALL pins knocked down = none left standing
         _selectedPins = List.filled(10, false);
-      } else if (_selectedOutcome == 'F' || _selectedOutcome == 'G') {
-        _selectedPins = List.from(widget.initialPins);
+      } 
+      else if (_selectedOutcome == "F") {
+        // Foul: no pins knocked down, all available pins still standing
+        if (widget.frameShotIndex == 1) {
+          _selectedPins = List.filled(10, true);
+        } else {
+          _selectedPins = List.from(widget.initialPins);
+        }
+        isFoul = true;
+      }
+      else if (_selectedOutcome == null) {
+        // Deselected: reset to no pins selected
+        _selectedPins = List.filled(10, false);
       }
     });
   }
@@ -130,114 +163,298 @@ class _ShotInputPageState extends State<ShotInputPage> {
     }
   }
 
-  Widget _buildPinDisplay() {
-    List<List<int>> pinRows = [
-      [7, 8, 9, 10],
-      [4, 5, 6],
-      [2, 3],
-      [1],
-    ];
+  Widget _buildPinDisplay({bool small = false, bool numbered = false, double scale = 1.0, bool selectable = true}) {
+   List<List<int>> pinRows = [
+     [7, 8, 9, 10],
+     [4, 5, 6],
+     [2, 3],
+     [1],
+   ];
+
+ double pinSize = (small ? 18.0 : 28.0) * scale;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: pinRows.map((row) {
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 1),
+          padding: const EdgeInsets.symmetric(vertical: 0.5),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: row.map((pin) => _buildPin(pin, size: 24.0)).toList(),
+            children: row.map((pin) => _buildPinNumbered(pin, size: pinSize, selectable: selectable)).toList(),
           ),
         );
       }).toList(),
     );
   }
 
-  Widget _buildPin(int pinNumber, {double size = 24.0}) {
-    int index = pinNumber - 1;
-    bool isStanding = _selectedPins[index];
-    bool isEditable = widget.initialPins[index];
+ Widget _buildPinNumbered(int pinNumber, {double size = 31.0, bool selectable = true}) {
+   int index = pinNumber - 1;
+   bool isSelected = _selectedPins[index];
+   // On shot 1: all pins are editable
+   // On shot 2: only pins that were standing after shot 1 are editable
+   bool isEditable = selectable && (widget.frameShotIndex == 1 || widget.initialPins[index]);
+   
+   // Determine pin color:
+   // - If not editable (knocked down in previous shot): dark grey
+   // - Shot 1: unselected = light slate grey, selected = purple
+   // - Shot 2: available pins start purple, selected (left standing) = red
+   Color pinColor;
+   if (!isEditable) {
+     pinColor = const Color.fromRGBO(100, 100, 100, 1); // dark grey - knocked down previous shot
+   } else if (widget.frameShotIndex == 1) {
+     // Shot 1
+     pinColor = isSelected 
+       ? const Color.fromRGBO(142, 124, 195, 1) // purple - selected as standing
+       : const Color.fromRGBO(119, 136, 153, 1); // light slate grey - will be knocked down
+   } else {
+     // Shot 2
+     pinColor = isSelected 
+       ? const Color.fromRGBO(220, 80, 80, 1) // red - selected as standing after shot 2
+       : const Color.fromRGBO(142, 124, 195, 1); // purple - available from shot 1
+   }
+
+   return GestureDetector(
+     onTap: isEditable ? () => _togglePin(index) : null,
+     child: Container(
+       width: size,
+       height: size,
+       margin: EdgeInsets.symmetric(horizontal: size * 0.04, vertical: size * 0.01),
+       decoration: BoxDecoration(
+         color: pinColor,
+         shape: BoxShape.circle,
+         border: Border.all(
+           color: isEditable ? Colors.black : Colors.black.withOpacity(0.4),
+           width: 0.8,
+         ),
+       ),
+       alignment: Alignment.center,
+       child: Text(
+         pinNumber.toString(),
+           style: TextStyle(
+             color: isSelected ? Colors.white : Colors.black87,
+             fontSize: size * 0.36,
+             fontWeight: FontWeight.bold,
+           ),
+       ),
+     ),
+   );
+ }
+
+  Widget _buildStrikeOrSpareButton({double scale = 1.0}) {
+    final String compact = widget.frameShotIndex == 1 ? 'X' : '/';
+    final double w = 64 * scale;
+    final double h = 44 * scale;
+    final bool isSelected = _selectedOutcome == compact;
+    final Color bg = isSelected ? const Color.fromRGBO(80, 200, 120, 1) : const Color.fromRGBO(153, 153, 153, 1);
+    final Color textColor = isSelected ? Colors.black : Colors.white;
 
     return GestureDetector(
-      onTap: isEditable ? () => _togglePin(index) : null,
+      onTap: () => _selectOutcome(compact),
       child: Container(
-        width: size,
-        height: size,
-        margin: EdgeInsets.symmetric(horizontal: size * 0.04, vertical: size * 0.01),
-        decoration: BoxDecoration(
-          color: isStanding ? const Color.fromRGBO(142, 124, 195, 1) : const Color.fromRGBO(153, 153, 153, 1),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: isEditable ? Colors.black : Colors.black.withOpacity(0.4),
-            width: 0.7,
-          ),
-        ),
+        width: w,
+        height: h,
+        decoration: BoxDecoration(color: bg, border: Border.all(color: Colors.black, width: 0.6 * scale)),
         alignment: Alignment.center,
-        child: Text(
-          pinNumber.toString(),
-          style: TextStyle(
-            color: isStanding ? Colors.white : Colors.black87,
-            fontSize: size * 0.36,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        child: Text(compact, style: TextStyle(color: textColor, fontSize: 14 * scale, fontWeight: FontWeight.w700)),
       ),
     );
   }
 
-  Widget _buildOutcomeButton(String code, String label) {
-    final isSelected = _selectedOutcome == code;
-    final bgColor = isSelected ? const Color.fromRGBO(80, 200, 120, 1) : const Color.fromRGBO(153, 153, 153, 1);
-    final textColor = isSelected ? Colors.black : Colors.white;
+Widget _buildFoulGutterButton({double scale = 1.0}) {
+   return PopupMenuButton<String>(
+     color: const Color.fromRGBO(67, 67, 67, 1),
+     onSelected: (s) {
+       setState(() {
+         // Both Foul and Gutter mean no pins knocked down: all available pins stay standing
+         if (widget.frameShotIndex == 1) {
+           _selectedPins = List.filled(10, true);
+         } else {
+           _selectedPins = List.from(widget.initialPins);
+         }
+         if (s == 'Foul') {
+           _selectedOutcome = 'F';
+           isFoul = true;
+         } else if (s == 'Gutter') {
+           // Gutter: no pins were knocked down; clear outcome selection
+           _selectedOutcome = null;
+           isFoul = false;
+         }
+       });
+     },
+     itemBuilder: (_) => [
+       const PopupMenuItem(value: 'Foul', child: Text('Foul', style: TextStyle(color: Colors.white))),
+       const PopupMenuItem(value: 'Gutter', child: Text('Gutter', style: TextStyle(color: Colors.white))),
+     ],
+     child: Container(
+       width: 64 * scale,
+       height: 44 * scale,
+       padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 4 * scale),
+       decoration: BoxDecoration(color: const Color.fromRGBO(153, 153, 153, 1), border: Border.all(color: Colors.black, width: 0.6 * scale)),
+       alignment: Alignment.center,
+       child: Text('-/F', style: TextStyle(color: Colors.white, fontSize: 14 * scale, fontWeight: FontWeight.w700)),
+     ),
+   );
+ }
+ Widget _buildRecordButton({double scale = 1.0, bool round = false}) {
+  Future<void> handleTap() async {
+    // If currently recording, stop and send command
+    if (_isRecording) {
+      await _stopRecording();
+    } else {
+      // Start recording
+      setState(() => _isRecording = true);
+      await BLEManager().sendRecordingCommand("startRec");
+      // Auto-stop after 30 seconds
+      _recordingTimer = Timer(const Duration(seconds: 30), () {
+        _stopRecording();
+      });
+    }
+  }
 
+  if (round) {
     return GestureDetector(
-      onTap: () => _selectOutcome(code),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: bgColor,
-          border: Border.all(color: Colors.black, width: 0.6),
-        ),
-        child: Tooltip(
-          message: label,
-          child: Text(
-            code,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+      onTap: handleTap,
+      child: CircleAvatar(
+        radius: 18 * scale,
+        backgroundColor: _isRecording ? Colors.redAccent : Colors.red,
+        child: Icon(
+          _isRecording ? Icons.stop : Icons.fiber_manual_record,
+          color: Colors.white,
+          size: 18 * scale,
         ),
       ),
     );
   }
+
+  final Color btnBg = _isRecording
+      ? Colors.redAccent
+      : const Color.fromRGBO(153, 153, 153, 1);
+
+  return GestureDetector(
+    onTap: handleTap,
+    child: Container(
+      width: 44 * scale,
+      height: 28 * scale,
+      decoration: BoxDecoration(
+        color: btnBg,
+        border: Border.all(color: Colors.black),
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        _isRecording ? Icons.stop : Icons.fiber_manual_record,
+        color: Colors.white,
+        size: 16 * scale,
+      ),
+    ),
+  );
+}
+Widget _buildStanceSlider({double scale = 1.0}) {
+ // Compact, trackless slider: show only thumb and tick marks with longer width.
+ final parentWidth = MediaQuery.of(context).size.width;
+ final width = (parentWidth * 0.85) * scale;
+ final thumbRadius = 8.0 * scale;
+ // Match slider's internal padding: thumb center moves from thumbRadius to (width - thumbRadius)
+ final pad = thumbRadius;
+ final avail = math.max(0.0, width - 2 * pad);
+
+   return Column(
+     children: [
+       // Row with end labels only
+       SizedBox(
+         width: width,
+         child: Row(
+           crossAxisAlignment: CrossAxisAlignment.center,
+           children: [
+             Text('39', style: TextStyle(color: Colors.white, fontSize: 12 * scale, fontWeight: FontWeight.bold)),
+             const Spacer(),
+             Text('1', style: TextStyle(color: Colors.white, fontSize: 12 * scale, fontWeight: FontWeight.bold)),
+           ],
+         ),
+       ),
+       SizedBox(height: 0 * scale),
+       SizedBox(
+         width: width,
+         height: 32 * scale,
+         child: Stack(
+           alignment: Alignment.center,
+           children: [
+             // Draws major ticks every 5 units
+             CustomPaint(
+               size: Size(width, 32 * scale),
+               painter: _MajorTickPainter(scale: scale, pad: pad, availWidth: avail),
+             ),
+             SliderTheme(
+               data: SliderTheme.of(context).copyWith(
+                 trackHeight: 0,
+                 activeTrackColor: Colors.transparent,
+                 inactiveTrackColor: Colors.transparent,
+                 thumbShape: RoundSliderThumbShape(enabledThumbRadius: 8 * scale, disabledThumbRadius: 8 * scale),
+                 overlayShape: RoundSliderOverlayShape(overlayRadius: 0),
+                 // hide built-in tick marks
+                 tickMarkShape: const RoundSliderTickMarkShape(tickMarkRadius: 0),
+                 activeTickMarkColor: Colors.transparent,
+                 inactiveTickMarkColor: Colors.transparent,
+                 showValueIndicator: ShowValueIndicator.never,
+               ),
+               child: Slider(
+                 value: _sliderPos,
+                 min: 1,
+                 max: 39,
+                 divisions: 38,
+                 onChanged: (v) => setState(() => _sliderPos = v),
+               ),
+             ),
+           ],
+         ),
+       ),
+     ],
+   );
+ }
 
   @override
   void dispose() {
     _pageController.dispose();
     _speedScrollController.removeListener(_onSpeedScroll);
     _speedScrollController.dispose();
+    _recordingTimer?.cancel();
     super.dispose();
   }
 
+  Future<void> _stopRecording() async {
+    if (_isRecording) {
+      _recordingTimer?.cancel();
+      _recordingTimer = null;
+      await BLEManager().sendRecordingCommand("stopRec");
+      setState(() => _isRecording = false);
+    }
+  }
+
   void _onPageChanged(int page) {
+    // Stop recording when changing pages
+    _stopRecording();
     setState(() {
       _currentPage = page;
     });
   }
 
+  int _calculatePinsDown() {
+    final initialStanding = widget.initialPins.where((p) => p).length;
+    final currentStanding = _selectedPins.where((p) => p).length;
+    return initialStanding - currentStanding;
+  }
+
   void _submit() {
-    // Return the initial data as the shot result for now
-    final pinsDownCount = widget.initialPins.where((p) => !p).length;
+    final pinsDownCount = _calculatePinsDown();
     Navigator.of(context).pop({
-      'pinsStanding': widget.initialPins,
+      'pinsStanding': _selectedPins,
       'pinsDownCount': pinsDownCount,
-      'outcome': pinsDownCount.toString(),
-      'isFoul': widget.initialIsFoul ?? false,
-      'lane': widget.initialLane,
-      'board': _boardOptions[_selectedBoard],
-      'speed': _selectedSpeed,
+      'outcome': _selectedOutcome,
+      'isFoul': isFoul,
+      'stance': _stance,
+      'board': _selectedBoard,
+      'lane': _selectedLane,
       'ball': _selectedBall,
+      'speed': _selectedSpeed,
     });
   }
 
@@ -292,12 +509,104 @@ class _ShotInputPageState extends State<ShotInputPage> {
             return Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 20, bottom: 10),
+                  padding: const EdgeInsets.only(top: 30, bottom: 4),
                   child: Text(
                     _titles[index],
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                // Stance value with grey box
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(90, 90, 90, 1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '$_stance',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                _buildStanceSlider(scale: 1.0),
+                const SizedBox(height: 10),
+                // Horizontal divider line
+                Container(
+                  width: MediaQuery.of(context).size.width * 0.7,
+                  height: 1,
+                  color: Colors.grey[600],
+                ),
+                const SizedBox(height: 10),
+                // Lane dropdown (horizontal layout)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Lane',
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                      decoration: BoxDecoration(
+                        color: const Color.fromRGBO(90, 90, 90, 1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: DropdownButton<int>(
+                        value: _selectedLane,
+                        dropdownColor: const Color.fromRGBO(80, 80, 80, 1),
+                        underline: const SizedBox(),
+                        isDense: true,
+                        items: [
+                          DropdownMenuItem(
+                            value: 1,
+                            child: Text(
+                              '1',
+                              style: TextStyle(color: Colors.white, fontSize: 12),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 2,
+                            child: Text(
+                              '2',
+                              style: TextStyle(color: Colors.white, fontSize: 12),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedLane = value ?? 1;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+              ],
+            );
+          } else if (index == 4) {
+            // Shot screen with pins and outcome
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 4),
+                  child: Text(
+                    _titles[index],
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -306,153 +615,17 @@ class _ShotInputPageState extends State<ShotInputPage> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Stance value display
-                      Text(
-                        _selectedStance.toStringAsFixed(0),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      // Slider with 0 and 40 on sides
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  '0',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 10,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Slider(
-                                    value: _selectedStance,
-                                    min: 0,
-                                    max: 40,
-                                    divisions: 40,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _selectedStance = value;
-                                      });
-                                    },
-                                    activeColor: const Color.fromRGBO(142, 124, 195, 1),
-                                    inactiveColor: Colors.grey[700],
-                                  ),
-                                ),
-                                Text(
-                                  '40',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            // Center indicator line
-                            Container(
-                              height: 1,
-                              color: Colors.grey[600],
-                              margin: EdgeInsets.only(left: 10),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      // Lane dropdown (horizontal layout)
+                      // Pin Display - larger scale
+                      _buildPinDisplay(scale: 1.3),
+                      // Outcome buttons - smaller and closer
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
-                            'Lane',
-                            style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: const Color.fromRGBO(100, 100, 100, 1),
-                              border: Border.all(color: Colors.grey[700]!, width: 1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: DropdownButton<int>(
-                              value: _selectedLane,
-                              dropdownColor: const Color.fromRGBO(80, 80, 80, 1),
-                              underline: const SizedBox(),
-                              items: [
-                                DropdownMenuItem(
-                                  value: 1,
-                                  child: Text(
-                                    'Lane 1',
-                                    style: TextStyle(color: Colors.white, fontSize: 11),
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 2,
-                                  child: Text(
-                                    'Lane 2',
-                                    style: TextStyle(color: Colors.white, fontSize: 11),
-                                  ),
-                                ),
-                              ],
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedLane = value ?? 1;
-                                });
-                              },
-                            ),
-                          ),
+                          _buildStrikeOrSpareButton(scale: 0.60),
+                          _buildFoulGutterButton(scale: 0.60),
                         ],
                       ),
                     ],
-                  ),
-                ),
-              ],
-            );
-          } else if (index == 4) {
-            // Shot screen with pins and outcome
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 30, bottom: 10),
-                  child: Text(
-                    _titles[index],
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        // Pin Display
-                        _buildPinDisplay(),
-                        const SizedBox(height: 15),
-                        // Outcome buttons
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildOutcomeButton(widget.frameShotIndex == 0 ? 'X' : '/', widget.frameShotIndex == 0 ? 'Strike' : 'Spare'),
-                            const SizedBox(width: 5),
-                            _buildOutcomeButton('F', 'Foul'),
-                            const SizedBox(width: 5),
-                            _buildOutcomeButton('G', 'Gutter'),
-                          ],
-                        ),
-                      ],
-                    ),
                   ),
                 ),
               ],
@@ -555,22 +728,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _isRecording = !_isRecording;
-                          });
-                        },
-                        child: CircleAvatar(
-                          radius: 40,
-                          backgroundColor: _isRecording ? Colors.redAccent : Colors.red,
-                          child: Icon(
-                            _isRecording ? Icons.stop : Icons.fiber_manual_record,
-                            color: Colors.white,
-                            size: 40,
-                          ),
-                        ),
-                      ),
+                      _buildRecordButton(scale: 2.2, round: true),
                       const SizedBox(height: 20),
                       Text(
                         _isRecording ? 'Recording...' : 'Press to Record',
@@ -882,4 +1040,35 @@ class _ShotInputPageState extends State<ShotInputPage> {
       ),
     );
   }
+}
+class _MajorTickPainter extends CustomPainter {
+ final double scale;
+ final double pad;
+ final double availWidth;
+ 
+ _MajorTickPainter({required this.scale, required this.pad, required this.availWidth});
+
+ @override
+ void paint(Canvas canvas, Size size) {
+   final paint = Paint()
+     ..color = Colors.white
+     ..strokeWidth = 2.0 * scale
+     ..strokeCap = StrokeCap.round;
+
+   // Draw ticks at stance positions 39, 35, 30, 25, 20, 15, 10, 5, 1
+   // Slider uses min=1, max=39 (38 divisions)
+   // SliderPos = 40 - stance, norm = (sliderPos - 1) / 38
+   final stanceValues = [39, 35, 30, 25, 20, 15, 10, 5, 1];
+   for (int stance in stanceValues) {
+     final sliderPos = 40 - stance;
+     final norm = (sliderPos - 1) / 38.0;
+     final double x = pad + norm * availWidth;
+     final double top = size.height * 0.40;
+     final double bottom = size.height * 0.60;
+     canvas.drawLine(Offset(x, top), Offset(x, bottom), paint);
+   }
+ }
+
+ @override
+ bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
