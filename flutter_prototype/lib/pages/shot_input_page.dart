@@ -11,6 +11,7 @@ class ShotInputPage extends StatefulWidget {
   final int initialBoard;
   final int initialBall;
   final double initialSpeed;
+  final int initialStance;
   final bool startInPost;
   final bool? initialIsFoul;
 
@@ -23,6 +24,7 @@ class ShotInputPage extends StatefulWidget {
     required this.initialBoard,
     required this.initialBall,
     required this.initialSpeed,
+    required this.initialStance,
     required this.startInPost,
     this.initialIsFoul,
   });
@@ -36,7 +38,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
   late ScrollController _speedScrollController;
   int _currentPage = 0;
   int _selectedBall = 1;
-  int _selectedBoard = 0;
+  int _selectedBoard = 1;
   bool isFoul = false;
   double _selectedSpeed = 15.0;
   late List<bool> _selectedPins;
@@ -93,6 +95,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
     _selectedBoard = widget.initialBoard;
     _selectedLane = widget.initialLane;
     _selectedSpeed = widget.initialSpeed;
+    _sliderPos = (40 - widget.initialStance).toDouble().clamp(1.0, 39.0);
     if (widget.initialIsFoul == true) {
       isFoul = true;
     }
@@ -196,10 +199,19 @@ class _ShotInputPageState extends State<ShotInputPage> {
    
    // Determine pin color:
    // - If not editable (knocked down in previous shot): dark grey
+   // - If strike/spare selected: all pins appear knocked down (dark grey)
    // - Shot 1: unselected = light slate grey, selected = purple
    // - Shot 2: available pins start purple, selected (left standing) = red
    Color pinColor;
-   if (!isEditable) {
+   
+   // If strike/spare/foul is selected, show knocked down appearance
+   if (_selectedOutcome == 'X' || _selectedOutcome == '/' || _selectedOutcome == 'F') {
+     pinColor = !isEditable || !isSelected
+         ? const Color.fromRGBO(100, 100, 100, 1) // dark grey - knocked down
+         : (widget.frameShotIndex == 1 
+             ? const Color.fromRGBO(152, 124, 229, 1) // Shot 1: foul shows purple (standing)
+             : const Color.fromARGB(255, 255, 0, 0)); // Shot 2: foul shows red (standing)
+   } else if (!isEditable) {
      pinColor = const Color.fromRGBO(100, 100, 100, 1); // dark grey - knocked down previous shot
    } else if (widget.frameShotIndex == 1) {
      // Shot 1
@@ -352,7 +364,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
  // Compact, trackless slider: show only thumb and tick marks with longer width.
  final parentWidth = MediaQuery.of(context).size.width;
  final width = (parentWidth * 0.85) * scale;
- final thumbRadius = 8.0 * scale;
+ final thumbRadius = 12.0 * scale;
  // Match slider's internal padding: thumb center moves from thumbRadius to (width - thumbRadius)
  final pad = thumbRadius;
  final avail = math.max(0.0, width - 2 * pad);
@@ -388,7 +400,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                  trackHeight: 0,
                  activeTrackColor: Colors.transparent,
                  inactiveTrackColor: Colors.transparent,
-                 thumbShape: RoundSliderThumbShape(enabledThumbRadius: 8 * scale, disabledThumbRadius: 8 * scale),
+                 thumbShape: RoundSliderThumbShape(enabledThumbRadius: 12 * scale, disabledThumbRadius: 12 * scale),
                  overlayShape: RoundSliderOverlayShape(overlayRadius: 0),
                  // hide built-in tick marks
                  tickMarkShape: const RoundSliderTickMarkShape(tickMarkRadius: 0),
@@ -519,21 +531,76 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                     ),
                   ),
                 ),
-                // Stance value with grey box
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color.fromRGBO(90, 90, 90, 1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    '$_stance',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
+                // Stance value with grey box and +/- buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (_sliderPos > 1) {
+                            _sliderPos = math.max(1.0, _sliderPos - 1);
+                          }
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color.fromRGBO(60, 60, 60, 1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          '+',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color.fromRGBO(90, 90, 90, 1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '$_stance',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (_sliderPos < 39) {
+                            _sliderPos = math.min(39.0, _sliderPos + 1);
+                          }
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color.fromRGBO(60, 60, 60, 1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          '-',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 _buildStanceSlider(scale: 1.0),

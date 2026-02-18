@@ -84,6 +84,9 @@ class SessionController extends ChangeNotifier {
   int defaultBoard = 18;
   int defaultBall = 1;
   double defaultSpeed = 15.0;
+  
+  // Per-lane stance defaults (lane 1 and lane 2)
+  Map<int, int> defaultStanceByLane = {1: 20, 2: 20};
 
   // Initialize test data with a detailed first game
   Shot _createTestShot({
@@ -231,6 +234,7 @@ class SessionController extends ChangeNotifier {
     required double speed,
     required int hitBoard,
     required int ball,
+    required int stance,
     required List<bool> standingPins, 
     required int pinsDownCount,
     required String position,
@@ -292,6 +296,7 @@ class SessionController extends ChangeNotifier {
     defaultSpeed = speed;
     defaultBoard = hitBoard;
     defaultBall = ball;
+    defaultStanceByLane[lane] = stance;
 
     // Logger: print shot info and frame shot counts after constructing newFrame/newGame but before assigning
     try {
@@ -377,6 +382,7 @@ class SessionController extends ChangeNotifier {
     required double speed,
     required int hitBoard,
     required int ball,
+    required int stance,
     required List<bool> standingPins,
     required int pinsDownCount,
     required String position,
@@ -439,6 +445,8 @@ class SessionController extends ChangeNotifier {
         } catch (e, st) {
           debugPrint('Failed to build session JSON after edit: $e\n$st');
         }
+        // Persist stance per lane when editing
+        defaultStanceByLane[lane] = stance;
       }
     }
     
