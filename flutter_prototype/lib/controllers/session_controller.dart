@@ -81,9 +81,9 @@ class SessionController extends ChangeNotifier {
 
   // Default selections for new shots
   int defaultLane = 1;
-  int defaultBoard = 18;
-  int defaultBall = 1;
-  double defaultSpeed = 15.0;
+  int defaultBoard = 0; // 0-based index: 0=Right
+  int defaultBall = 3;
+  double defaultSpeed = 15.5;
   
   // Per-lane stance defaults (lane 1 and lane 2)
   Map<int, int> defaultStanceByLane = {1: 20, 2: 20};
@@ -99,12 +99,12 @@ class SessionController extends ChangeNotifier {
     final leaveType = Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul);
     return Shot(
       shotNumber: shotNumber,
-      ball: 1,
+      ball: defaultBall,
       count: count,
       leaveType: leaveType,
       timestamp: DateTime.now().add(Duration(seconds: shotNumber)),
       position: position,
-      speed: 15.5 + (shotNumber % 3) * 0.1,
+      speed: defaultSpeed + (shotNumber % 3) * 0.1,
       hitBoard: 12 + (shotNumber % 5),
     );
   }

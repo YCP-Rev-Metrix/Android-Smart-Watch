@@ -38,9 +38,11 @@ class _ShotInputPageState extends State<ShotInputPage> {
   late ScrollController _speedScrollController;
   int _currentPage = 0;
   int _selectedBall = 1;
-  int _selectedBoard = 1;
+  int _selectedBoard = 0;
   bool isFoul = false;
-  double _selectedSpeed = 15.0;
+  double _selectedSpeed = 15;
+  int _selectedSpeedInt = 15; // Integer part of speed (5-40)
+  int _selectedSpeedDecimal = 0; // Decimal part of speed (0-9)
   late List<bool> _selectedPins;
   String? _selectedOutcome;
   bool _isRecording = false;
@@ -95,6 +97,8 @@ class _ShotInputPageState extends State<ShotInputPage> {
     _selectedBoard = widget.initialBoard;
     _selectedLane = widget.initialLane;
     _selectedSpeed = widget.initialSpeed;
+    _selectedSpeedInt = widget.initialSpeed.truncate();
+    _selectedSpeedDecimal = ((widget.initialSpeed - widget.initialSpeed.truncate()) * 10).round();
     _sliderPos = (40 - widget.initialStance).toDouble().clamp(1.0, 39.0);
     if (widget.initialIsFoul == true) {
       isFoul = true;
@@ -463,7 +467,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
       'outcome': _selectedOutcome,
       'isFoul': isFoul,
       'stance': _stance,
-      'board': _selectedBoard,
+      'board': _selectedBoard, // Direct index (0-8)
       'lane': _selectedLane,
       'ball': _selectedBall,
       'speed': _selectedSpeed,
@@ -736,8 +740,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
               ],
             );
           } else if (index == 6) {
-            // Speed selector page
-            final speedIndex = _speedOptions.indexOf(_selectedSpeed);
+            // Speed selector page with dual vertical pickers
             return Column(
               children: [
                 Padding(
@@ -753,14 +756,8 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 ),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildHorizontalSpeedPicker(scale: 2.5),
-                        const SizedBox(height: 15),
-                      ],
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: _buildDualSpeedPickers(),
                   ),
                 ),
                 Padding(
@@ -903,101 +900,255 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     );
   }
 
-  Widget _buildHorizontalSpeedPicker({double scale = 1.0}) {
-    const double itemWidth = 80;
-    final controller = ScrollController(initialScrollOffset: 0);
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 2.0 * scale),
-      child: Column(
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final visibleWidth = constraints.maxWidth;
-
-              void centerOnValue(int index) {
-                final targetOffset = (index * itemWidth) - (visibleWidth / 2) + (itemWidth / 2);
-                controller.animateTo(
-                  targetOffset.clamp(
-                    controller.position.minScrollExtent,
-                    controller.position.maxScrollExtent,
-                  ),
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeOut,
-                );
-              }
-
-              final values = List<int>.generate(351, (i) => i + 50);
-              final currentValue = (_selectedSpeed * 10).round().clamp(values.first, values.last);
-
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                final idx = ((_selectedSpeed * 10).round() - values.first);
-                centerOnValue(idx.clamp(0, values.length - 1));
-              });
-
-              return Container(
-                height: 28 * scale,
-                width: constraints.maxWidth,
-                decoration: const BoxDecoration(),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(6 * scale),
-                  child: ShaderMask(
-                    shaderCallback: (rect) {
-                      return const LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          Colors.transparent,
-                          Colors.white,
-                          Colors.white,
-                          Colors.transparent,
-                        ],
-                        stops: [0.0, 0.12, 0.88, 1.0],
-                      ).createShader(rect);
-                    },
-                    blendMode: BlendMode.dstIn,
-                    child: ListView.builder(
-                      controller: controller,
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: values.length,
-                      itemBuilder: (context, i) {
-                        final isSelected = values[i] == currentValue;
-
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() => _selectedSpeed = values[i] / 10.0);
-                            centerOnValue(i);
-                          },
-                          child: Container(
-                            width: itemWidth,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              border: Border(
-                                right: BorderSide(
-                                  color: Colors.black.withOpacity(0.2),
-                                  width: 0.8,
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              (values[i] / 10.0).toStringAsFixed(1),
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : Colors.black.withOpacity(0.80),
-                                fontSize: isSelected ? 30 : 20,
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              );
-            },
+  Widget _buildDualSpeedPickers() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Left picker for integer part (5-40)
+        Expanded(
+          child: _buildSpeedIntPicker(),
+        ),
+        // Decimal point between pickers
+        Padding(
+          padding: const EdgeInsets.only(left: 4, right: 4, top: 18),
+          child: Text(
+            '.',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ],
-      ),
+        ),
+        // Right picker for decimal part (0-9)
+        Expanded(
+          child: _buildSpeedDecimalPicker(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSpeedIntPicker() {
+    const double itemHeight = 40;
+    final controller = ScrollController();
+    final intValues = List<int>.generate(26, (i) => 30 - i); // 30 to 5 (reversed)
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final visibleHeight = constraints.maxHeight;
+
+        void centerOnValue(int index) {
+          final targetOffset = (index * itemHeight);
+          controller.animateTo(
+            targetOffset.clamp(
+              controller.position.minScrollExtent,
+              controller.position.maxScrollExtent,
+            ),
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        }
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final idx = 30 - _selectedSpeedInt; // Reversed index
+          if (idx >= 0 && idx < intValues.length) {
+            centerOnValue(idx);
+          }
+        });
+
+        return Container(
+          height: constraints.maxHeight,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: ShaderMask(
+              shaderCallback: (rect) {
+                return const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.white,
+                    Colors.white,
+                    Colors.transparent,
+                  ],
+                  stops: [0.0, 0.15, 0.85, 1.0],
+                ).createShader(rect);
+              },
+              blendMode: BlendMode.dstIn,
+              child: ListView.builder(
+                controller: controller,
+                scrollDirection: Axis.vertical,
+                physics: const BouncingScrollPhysics(),
+                itemCount: intValues.length + 2, // +2 for top/bottom padding
+                itemBuilder: (context, i) {
+                  // Add minimal padding at top to align selected value with decimal point
+                  if (i == 0) {
+                    return SizedBox(height: itemHeight);
+                  }
+                  // Add padding at bottom
+                  if (i == intValues.length + 1) {
+                    return SizedBox(height: visibleHeight - itemHeight);
+                  }
+
+                  final itemIndex = i - 1;
+                  final value = intValues[itemIndex];
+                  final isSelected = value == _selectedSpeedInt;
+
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedSpeedInt = value;
+                        _selectedSpeed = _selectedSpeedInt + (_selectedSpeedDecimal / 10.0);
+                      });
+                      centerOnValue(itemIndex);
+                    },
+                    child: Container(
+                      height: itemHeight,
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 4),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Colors.black.withOpacity(0.2),
+                            width: 0.8,
+                          ),
+                          left: BorderSide(
+                            color: Colors.transparent,
+                            width: 50,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        value.toString(),
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.black.withOpacity(0.80),
+                          fontSize: isSelected ? 28 : 20,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSpeedDecimalPicker() {
+    const double itemHeight = 40;
+    final controller = ScrollController();
+    final decimalValues = List<int>.generate(10, (i) => 9 - i); // 9 to 0 (reversed)
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final visibleHeight = constraints.maxHeight;
+
+        void centerOnValue(int index) {
+          final targetOffset = (index * itemHeight);
+          controller.animateTo(
+            targetOffset.clamp(
+              controller.position.minScrollExtent,
+              controller.position.maxScrollExtent,
+            ),
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        }
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final idx = 9 - _selectedSpeedDecimal; // Reversed index
+          if (idx >= 0 && idx < decimalValues.length) {
+            centerOnValue(idx);
+          }
+        });
+
+        return Container(
+          height: constraints.maxHeight,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: ShaderMask(
+              shaderCallback: (rect) {
+                return const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.white,
+                    Colors.white,
+                    Colors.transparent,
+                  ],
+                  stops: [0.0, 0.15, 0.85, 1.0],
+                ).createShader(rect);
+              },
+              blendMode: BlendMode.dstIn,
+              child: ListView.builder(
+                controller: controller,
+                scrollDirection: Axis.vertical,
+                physics: const BouncingScrollPhysics(),
+                itemCount: decimalValues.length + 2, // +2 for top/bottom padding
+                itemBuilder: (context, i) {
+                  // Add minimal padding at top to align selected value with decimal point
+                  if (i == 0) {
+                    return SizedBox(height: itemHeight);
+                  }
+                  // Add padding at bottom
+                  if (i == decimalValues.length + 1) {
+                    return SizedBox(height: visibleHeight - itemHeight);
+                  }
+
+                  final itemIndex = i - 1;
+                  final value = decimalValues[itemIndex];
+                  final isSelected = value == _selectedSpeedDecimal;
+
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedSpeedDecimal = value;
+                        _selectedSpeed = _selectedSpeedInt + (_selectedSpeedDecimal / 10.0);
+                      });
+                      centerOnValue(itemIndex);
+                    },
+                    child: Container(
+                      height: itemHeight,
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.only(left: 4),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Colors.black.withOpacity(0.2),
+                            width: 0.8,
+                          ),
+                          right: BorderSide(
+                            color: Colors.transparent,
+                            width: 50,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        value.toString(),
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.black.withOpacity(0.80),
+                          fontSize: isSelected ? 28 : 20,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1008,15 +1159,16 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     required String Function(int) labelFormatter,
     double itemHeight = 60,
   }) {
-    final controller = ScrollController(initialScrollOffset: 0);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2.0),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final visibleHeight = constraints.maxHeight;
+          final initialOffset = (selectedIndex * itemHeight).clamp(0.0, (items.length - 1) * itemHeight);
+          final controller = ScrollController(initialScrollOffset: initialOffset);
 
           void centerOnValue(int index) {
-            final targetOffset = (index * itemHeight) - (visibleHeight / 2) + (itemHeight / 2);
+            final targetOffset = (index * itemHeight);
             controller.animateTo(
               targetOffset.clamp(
                 controller.position.minScrollExtent,
@@ -1030,7 +1182,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
           final currentValue = selectedIndex;
 
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            centerOnValue(selectedIndex + 1); // +1 for top padding
+            centerOnValue(selectedIndex); // Direct index, no +1
           });
 
           return Container(
@@ -1066,7 +1218,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                     }
                     // Add padding at bottom
                     if (i == items.length + 1) {
-                      return SizedBox(height: itemHeight);
+                      return SizedBox(height: visibleHeight - itemHeight);
                     }
                     
                     final itemIndex = i - 1;
@@ -1075,7 +1227,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                     return GestureDetector(
                       onTap: () {
                         onSelectionChanged(itemIndex);
-                        centerOnValue(i);
+                        centerOnValue(itemIndex);
                       },
                       child: Container(
                         height: itemHeight,
