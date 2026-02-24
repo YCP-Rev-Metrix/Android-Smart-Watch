@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
 import '../controllers/ble_manager.dart';
+import '../models/shot.dart';
 
 class ShotInputPage extends StatefulWidget {
   final List<bool> initialPins;
@@ -461,6 +462,23 @@ Widget _buildStanceSlider({double scale = 1.0}) {
 
   void _submit() {
     final pinsDownCount = _calculatePinsDown();
+
+    // Build the Shot model from all collected input data
+    final shot = Shot(
+      shotNumber: widget.shotNumber,
+      ball: _selectedBall,
+      count: pinsDownCount,
+      leaveType: Shot.buildLeaveType(standingPins: _selectedPins, isFoul: isFoul),
+      timestamp: DateTime.now(),
+      position: _selectedOutcome ?? pinsDownCount.toString(),
+      speed: _selectedSpeed,
+      hitBoard: _selectedBoard,
+    );
+
+    // Print the completed Shot object to the console
+    // ignore: avoid_print
+    print('Shot submitted: ${shot.toJson()}');
+
     Navigator.of(context).pop({
       'pinsStanding': _selectedPins,
       'pinsDownCount': pinsDownCount,

@@ -250,16 +250,6 @@ class SessionController extends ChangeNotifier {
 
     final oldFrame = activeGame.frames[activeFrameIndexForUpdate];
     
-    // Logger: print current active indices and shot counts before recording
-    try {
-      debugPrint('Recording shot - activeFrameIndex=$_activeFrameIndex, activeShotIndex=$_activeShotIndex');
-      for (var i = 0; i < activeGame.frames.length; i++) {
-        debugPrint('Game ${activeGame.gameNumber} Frame ${i + 1} shots=${activeGame.frames[i].shots.length}');
-      }
-    } catch (e) {
-      debugPrint('Diagnostic print failed: $e');
-    }
-
     final globalShotNumber = activeGame.frames.fold<int>(0, (sum, f) => sum + f.shots.length) + 1;
 
     // 2. Create the new Shot object
@@ -297,39 +287,6 @@ class SessionController extends ChangeNotifier {
     defaultBoard = hitBoard;
     defaultBall = ball;
     defaultStanceByLane[lane] = stance;
-
-    // Logger: print shot info and frame shot counts after constructing newFrame/newGame but before assigning
-    try {
-      debugPrint('New shot created: shotNumber=$globalShotNumber, count=$pinsDownCount, position=$position, isFoul=$isFoul');
-      debugPrint('NewFrame shots count (will be): ${newFrame.shots.length} for frame ${newFrame.frameNumber}');
-    } catch (_) {}
-
-    // Build a nested JSON representation of the in-memory session (Session -> Games -> Frames -> Shots)
-    try {
-      final sessionMap = {
-        'sessionId': currentSession?.sessionId ?? '',
-        'games': currentSession!.games.map((g) => {
-              'gameNumber': g.gameNumber,
-              'totalScore': g.totalScore,
-              'frames': g.frames.map((f) => f.toJson()).toList(),
-            }).toList(),
-      };
-
-      // Logger: print the session JSON structure.
-      final pretty = const JsonEncoder.withIndent('  ').convert(sessionMap);
-      for (final line in pretty.split('\n')) {
-        debugPrint(line);
-      }
-      _saveSessionJsonToDocuments(pretty, filename: 'RevMetrix.json');
-      // Print per-game/frame shot counts to make it easy to see progress
-      for (var gi = 0; gi < currentSession!.games.length; gi++) {
-        final g = currentSession!.games[gi];
-        final frameShotCounts = g.frames.map((f) => f.shots.length).toList();
-        debugPrint('Game ${g.gameNumber} frame shot counts: $frameShotCounts');
-      }
-    } catch (e, st) {
-      debugPrint('Failed to build session JSON: $e\n$st');
-    }
 
     notifyListeners();
   }
