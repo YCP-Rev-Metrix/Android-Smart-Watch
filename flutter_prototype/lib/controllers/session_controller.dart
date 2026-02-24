@@ -81,9 +81,12 @@ class SessionController extends ChangeNotifier {
 
   // Default selections for new shots
   int defaultLane = 1;
-  int defaultBoard = 18;
-  int defaultBall = 1;
-  double defaultSpeed = 15.0;
+  int defaultBoard = 0; // 0-based index: 0=Right
+  int defaultBall = 3;
+  double defaultSpeed = 15.5;
+  
+  // Per-lane stance defaults (lane 1 and lane 2)
+  Map<int, int> defaultStanceByLane = {1: 20, 2: 20};
 
   // Initialize test data with a detailed first game
   Shot _createTestShot({
@@ -96,12 +99,12 @@ class SessionController extends ChangeNotifier {
     final leaveType = Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul);
     return Shot(
       shotNumber: shotNumber,
-      ball: 1,
+      ball: defaultBall,
       count: count,
       leaveType: leaveType,
       timestamp: DateTime.now().add(Duration(seconds: shotNumber)),
       position: position,
-      speed: 15.5 + (shotNumber % 3) * 0.1,
+      speed: defaultSpeed + (shotNumber % 3) * 0.1,
       hitBoard: 12 + (shotNumber % 5),
     );
   }
@@ -231,6 +234,7 @@ class SessionController extends ChangeNotifier {
     required double speed,
     required int hitBoard,
     required int ball,
+    required int stance,
     required List<bool> standingPins, 
     required int pinsDownCount,
     required String position,
@@ -292,6 +296,7 @@ class SessionController extends ChangeNotifier {
     defaultSpeed = speed;
     defaultBoard = hitBoard;
     defaultBall = ball;
+    defaultStanceByLane[lane] = stance;
 
     // Logger: print shot info and frame shot counts after constructing newFrame/newGame but before assigning
     try {
@@ -377,6 +382,7 @@ class SessionController extends ChangeNotifier {
     required double speed,
     required int hitBoard,
     required int ball,
+    required int stance,
     required List<bool> standingPins,
     required int pinsDownCount,
     required String position,
@@ -432,11 +438,15 @@ class SessionController extends ChangeNotifier {
                 }).toList(),
           };
           final prettyEdit = const JsonEncoder.withIndent('  ').convert(sessionMap);
-          for (final line in prettyEdit.split('\n')) debugPrint(line);
+          for (final line in prettyEdit.split('\n')) {
+            debugPrint(line);
+          }
           _saveSessionJsonToDocuments(prettyEdit, filename: 'RevMetrix.json');
         } catch (e, st) {
           debugPrint('Failed to build session JSON after edit: $e\n$st');
         }
+        // Persist stance per lane when editing
+        defaultStanceByLane[lane] = stance;
       }
     }
     

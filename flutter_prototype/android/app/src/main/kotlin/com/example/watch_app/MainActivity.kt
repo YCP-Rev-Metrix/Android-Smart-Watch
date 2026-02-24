@@ -15,8 +15,17 @@ class MainActivity: FlutterActivity() {
 
     private val CHANNEL = "ble_service_channel"
 
+    companion object {
+        // Track if Flutter engine is attached
+        var isFlutterAttached = false
+            private set
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        
+        // Mark Flutter as attached
+        isFlutterAttached = true
 
             // Create a persistent MethodChannel used for BLE service and GATT operations
             val methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
@@ -57,6 +66,12 @@ class MainActivity: FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    override fun onDestroy() {
+        // Mark Flutter as detached
+        isFlutterAttached = false
+        super.onDestroy()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
