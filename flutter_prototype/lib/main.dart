@@ -2,10 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter/services.dart';
 import 'controllers/ble_manager.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'pages/frame_page.dart';     // or your main page
+import 'pages/sessions_page.dart';     // or your main page
+import 'pages/home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Request notification permission on startup (Android 13+ / iOS)
+  try {
+    await Permission.notification.request();
+  } catch (e) {
+    // ignore errors requesting permission on older platforms
+  }
 
   // Initialize BLE manager early
   Get.put(BLEManager());
@@ -92,7 +102,7 @@ class _StartupWrapperState extends State<StartupWrapper> {
     }
 
     // After BLE setup, load your normal UI
-    return const FrameShell();  
+    return const HomePage();  
     // Or use DevSettings first:
     // return const DevSettingsPage();
   }

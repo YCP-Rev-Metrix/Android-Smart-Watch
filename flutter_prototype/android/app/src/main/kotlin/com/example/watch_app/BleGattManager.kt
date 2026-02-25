@@ -7,6 +7,15 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
 import android.util.Log
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Intent
+import android.app.PendingIntent
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import android.Manifest
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
 import io.flutter.plugin.common.MethodChannel
 import java.util.*
 
@@ -21,18 +30,29 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
-
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
     private var advertiser: BluetoothLeAdvertiser? = bluetoothAdapter?.bluetoothLeAdvertiser
     private var gattServer: BluetoothGattServer? = null
     private val connectedDevices = mutableSetOf<BluetoothDevice>()
+    private val NOTIF_CHANNEL_ID = "watch_events_channel"
+    private val NOTIF_CHANNEL_NAME = "Watch Events"
+    private val notifManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private var notifIdCounter = 1
+
+    init {
+        createNotificationChannelIfNeeded()
+    }
 
     // --- Advertise Callback ---
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             Log.i(TAG, "Advertise start success")
             mainHandler.post {
+                if (!MainActivity.isFlutterAttached) {
+                    Log.w(TAG, "Flutter not attached, skipping onAdvertisingStarted callback")
+                    return@post
+                }
                 try {
                     channel.invokeMethod("onAdvertisingStarted", null)
                 } catch (e: Exception) {
@@ -44,6 +64,10 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
         override fun onStartFailure(errorCode: Int) {
             Log.e(TAG, "Advertise failed: $errorCode")
             mainHandler.post {
+                if (!MainActivity.isFlutterAttached) {
+                    Log.w(TAG, "Flutter not attached, skipping onAdvertisingFailed callback")
+                    return@post
+                }
                 try {
                     channel.invokeMethod("onAdvertisingFailed", errorCode)
                 } catch (e: Exception) {
@@ -71,6 +95,10 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
             Log.i(TAG, "Device connected: ${device.address}")
 
             mainHandler.post {
+                if (!MainActivity.isFlutterAttached) {
+                    Log.w(TAG, "Flutter not attached, skipping onConnectionStateChange callback")
+                    return@post
+                }
                 try {
                     channel.invokeMethod("onConnectionStateChange", args)
                 } catch (e: Exception) {
@@ -98,12 +126,25 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
                     "value" to value
                 )
                 mainHandler.post {
+                    if (!MainActivity.isFlutterAttached) {
+                        Log.w(TAG, "Flutter not attached, skipping onCharacteristicWrite callback")
+                        return@post
+                    }
                     try {
                         channel.invokeMethod("onCharacteristicWrite", args)
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to invoke Flutter method: ${e.message}")
                     }
                 }
+
+                    // Post a local notification for command writes
+                    try {
+                        val title = "Command received"
+                        val body = "From ${device.address}: ${value.joinToString(separator = ",") { it.toString() }}"
+                        showNotification(title, body)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Notification error: ${e.message}")
+                    }
             }
 
             if (responseNeeded) {
@@ -190,5 +231,51 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
         } catch (e: Exception) {
             Log.e(TAG, "sendNotification error: $e")
         }
+    }
+
+    private fun createNotificationChannelIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val existing = notifManager.getNotificationChannel(NOTIF_CHANNEL_ID)
+            if (existing == null) {
+                val channel = NotificationChannel(
+                    NOTIF_CHANNEL_ID,
+                    NOTIF_CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_DEFAULT
+                )
+                channel.description = "Notifications for watch events"
+                notifManager.createNotificationChannel(channel)
+            }
+        }
+    }
+
+    private fun showNotification(title: String, body: String) {
+        // If Android 13+, ensure runtime permission is granted before posting
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                Log.w(TAG, "POST_NOTIFICATIONS permission not granted; skipping notification")
+                return
+            }
+        }
+
+        val intent = Intent(context, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            0,
+            intent,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        )
+
+        val notif = NotificationCompat.Builder(context, NOTIF_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        val id = notifIdCounter++
+        notifManager.notify(id, notif)
     }
 }

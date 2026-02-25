@@ -39,12 +39,13 @@ class BLEPacketTestUtil {
         final shot = Shot(
           shotNumber: frameNum * 2 + shotNum + 1,
           ball: 1,
-          count: 5 + shotNum, // Pins knocked down
-          leaveType: leaveType,
-          position: 'pocket',
-          timestamp: DateTime.now().add(Duration(minutes: frameNum * 2, seconds: shotNum * 30)),
+          numOfPinsKnocked: 5 + shotNum, // Pins knocked down
+          pins: leaveType,
+          board: 18,
+          stance: 20,
           speed: 15.5 + (shotNum * 0.5),
-          hitBoard: 18,
+          frameNum: frameNum + 1,
+          lane: (frameNum % 2) + 1,
         );
         
         frame = frame.copyWithShot(shot);
@@ -59,7 +60,7 @@ class BLEPacketTestUtil {
       score: game.score,
       startingLane: game.startingLane,
       lanes: game.lanes,
-      frames: [...game.frames.sublist(0, 3).asMap().entries.map((e) => updatedFrames[e.key]).toList(), ...game.frames.sublist(3)],
+      frames: [...game.frames.sublist(0, 3).asMap().entries.map((e) => updatedFrames[e.key]), ...game.frames.sublist(3)],
     );
     
     // Replace the game in the session
@@ -90,12 +91,13 @@ class BLEPacketTestUtil {
     final shot = Shot(
       shotNumber: 1,
       ball: 1,
-      count: 10,
-      leaveType: leaveType,
-      position: 'pocket',
-      timestamp: DateTime.now(),
+      numOfPinsKnocked: 10,
+      pins: leaveType,
+      board: 18,
+      stance: 20,
       speed: 15.0,
-      hitBoard: 18,
+      frameNum: 1,
+      lane: 1,
     );
     
     frame = frame.copyWithShot(shot);
@@ -129,9 +131,9 @@ class BLEPacketTestWidget extends StatefulWidget {
   final bool useMinimalSession;
   
   const BLEPacketTestWidget({
-    Key? key,
+    super.key,
     this.useMinimalSession = false,
-  }) : super(key: key);
+  });
 
   @override
   State<BLEPacketTestWidget> createState() => _BLEPacketTestWidgetState();
@@ -146,28 +148,28 @@ class _BLEPacketTestWidgetState extends State<BLEPacketTestWidget> {
       _isSending = true;
     });
     
-    print('📤 [BLE Test] Button pressed, minimal=$minimal');
+    print('[BLE Test] Button pressed, minimal=$minimal');
     
     try {
-      print('📤 [BLE Test] Creating session...');
+      print('[BLE Test] Creating session...');
       final session = minimal
           ? BLEPacketTestUtil.createMinimalTestSession()
           : BLEPacketTestUtil.createTestSession();
       
-      print('📤 [BLE Test] Session created:');
+      print('[BLE Test] Session created:');
       print('   Session ID: ${session.sessionId}');
       print('   Games: ${session.games.length}');
       print('   Balls: ${session.balls}');
       
-      print('📤 [BLE Test] Converting to JSON...');
+      print('[BLE Test] Converting to JSON...');
       final json = session.toJson();
-      print('📤 [BLE Test] JSON created, calling sendJsonInChunks...');
+      print('[BLE Test] JSON created, calling sendJsonInChunks...');
       
       await _ble.sendJsonInChunks(json);
       
-      print('📤 [BLE Test] Transmission complete!');
+      print('[BLE Test] Transmission complete!');
     } catch (e) {
-      print('❌ [BLE Test] Error: $e');
+      print('[BLE Test] Error: $e');
       print(e);
     } finally {
       setState(() => _isSending = false);

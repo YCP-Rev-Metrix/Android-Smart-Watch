@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 
 class BLEManager extends GetxController {
@@ -18,9 +18,56 @@ class BLEManager extends GetxController {
   var connectedDeviceAddress = ''.obs;
   var isConnected = false.obs;
 
+  // Chunk reassembly fields
+  final List<int> _incomingBuffer = [];
+  DateTime? _lastChunkTime;
+
   BLEManager() {
     // Register native callback handler early so we receive native events
     _channel.setMethodCallHandler(_handleNativeCalls);
+    _initLocalNotifications();
+  }
+
+  // --- Local notifications setup ---
+  final FlutterLocalNotificationsPlugin _localNotif = FlutterLocalNotificationsPlugin();
+
+  Future<void> _initLocalNotifications() async {
+    const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings = InitializationSettings(android: androidInit);
+    try {
+      await _localNotif.initialize(initSettings);
+
+      const AndroidNotificationChannel channel = AndroidNotificationChannel(
+        'watch_events_channel', // id
+        'Watch Events', // title
+        description: 'Notifications for watch events',
+        importance: Importance.defaultImportance,
+      );
+
+      await _localNotif
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(channel);
+    } catch (e) {
+      print('Local notifications init failed: $e');
+    }
+  }
+
+  Future<void> _showLocalNotification(String title, String body) async {
+    try {
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'watch_events_channel',
+        'Watch Events',
+        channelDescription: 'Notifications for watch events',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        ticker: 'ticker',
+      );
+
+      const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+      await _localNotif.show(DateTime.now().millisecondsSinceEpoch ~/ 1000, title, body, platformDetails);
+    } catch (e) {
+      print('Show notification failed: $e');
+    }
   }
 
   Future<void> initGattServer() async {
@@ -58,26 +105,81 @@ class BLEManager extends GetxController {
             return null;
           }
 
-          final raw = utf8.decode(bytes);
+          // Chunk reassembly logic
+          final now = DateTime.now();
+          
+          // If more than 500ms since last chunk, start fresh
+          if (_lastChunkTime != null && now.difference(_lastChunkTime!) > Duration(milliseconds: 500)) {
+            print('WATCH BLE Timeout, clearing buffer');
+            _incomingBuffer.clear();
+          }
+          _lastChunkTime = now;
+          
+          // Add chunk to buffer
+          _incomingBuffer.addAll(bytes);
+          print('WATCH BLE Chunk received (${bytes.length} bytes), buffer size: ${_incomingBuffer.length}');
+          
+          // Try to parse as JSON
           try {
+            final raw = utf8.decode(_incomingBuffer);
             final parsed = json.decode(raw);
+            
+            // Success! We have complete JSON
+            print('WATCH BLE RECEIVED COMPLETE: $raw');
+            
             if (parsed is Map<String, dynamic>) {
               lastReceivedCommand.value = parsed;
+              
+              // Handle userData command
+              if (parsed['cmd'] == 'userData') {
+                print('WATCH BLE Username: ${parsed['username']}');
+                print('WATCH BLE Hand: ${parsed['hand']}');
+                print('WATCH BLE Sessions: ${parsed['sessions']}');
+                print('WATCH BLE Balls: ${parsed['balls']}');
+                
+                // Store this data in your watch app state
+              }
+              
+              await _showLocalNotification('Command received', 'Received ${parsed['cmd']}');
             } else {
               lastReceivedCommand.value = {'value': parsed};
             }
+            
+            // Clear buffer after successful parse
+            _incomingBuffer.clear();
+            _lastChunkTime = null;
+            
           } catch (e) {
-            lastReceivedCommand.value = {'raw': raw};
+            // Not complete yet, wait for more chunks
+            if (_incomingBuffer.length > 1000) {
+              print('WATCH BLE Buffer too large, clearing');
+              _incomingBuffer.clear();
+              _lastChunkTime = null;
+            }
           }
           break;
+
+        // show local notification for connection changes from native (also handled below in onConnectionStateChange)
 
         case 'onConnectionStateChange':
           final args = call.arguments as Map<dynamic, dynamic>;
           final device = args['device'] as String? ?? '';
           final state = args['state'] as int? ?? 0;
           connectedDeviceAddress.value = device;
-          isConnected.value = state == 2; 
+          isConnected.value = state == 2;
           update();
+
+          // Show a user-friendly notification for connect/disconnect
+          try {
+            if (state == 2) {
+              await _showLocalNotification('Bluetooth connected', 'Connected to mobile application');
+            } else if (state == 0 || state == 1) {
+              // treat 0/1 as disconnected for user messaging
+              await _showLocalNotification('Bluetooth disconnected', 'Disconnected from mobile application');
+            }
+          } catch (e) {
+            print('Notification error: $e');
+          }
           break;
 
         case 'onAdvertisingStarted':

@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/ble_manager.dart';
-import '../utils/ble_packet_test.dart';
 
 class DevSettingsPage extends StatefulWidget {
   const DevSettingsPage({super.key});
@@ -13,43 +11,24 @@ class DevSettingsPage extends StatefulWidget {
 
 class _DevSettingsPageState extends State<DevSettingsPage> {
   final ble = Get.find<BLEManager>();
-
-  void _handleSwipe(DragEndDetails details) {
-    // Calculate swipe velocity
-    final velocity = details.velocity.pixelsPerSecond.dx;
-    
-    // Swipe right if velocity is positive and significant
-    if (velocity > 300) {
-      Get.to(() => const BLEPacketTestWidget());
-    }
-  }
+  bool isDarkMode = true;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onHorizontalDragEnd: _handleSwipe,
-      child: Scaffold(
+    return Scaffold(
+      backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+      appBar: AppBar(
+        title: const Text('Settings', style: TextStyle(fontSize: 14)),
         backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 8.0),
-            child: Column(
+        toolbarHeight: 40,
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 12),
-
-              // Title 
-              const Text(
-                "BLUETOOTH",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
               // Connection Status
               Obx(() {
                 final connected = ble.isConnected.value;
@@ -60,7 +39,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                     Text(
                       connected ? "Connected" : "Disconnected",
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         color: connected
                             ? const Color.fromRGBO(142, 124, 195, 1)
                             : Colors.white70,
@@ -71,7 +50,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                       Text(
                         addr,
                         style: const TextStyle(
-                          fontSize: 10,
+                          fontSize: 8,
                           color: Colors.white60,
                         ),
                       )
@@ -79,117 +58,131 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                 );
               }),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
 
-              // Buttons Row
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 32,
-                      child: Obx(() {
-                        return ElevatedButton(
-                          onPressed: () async {
-                            if (!ble.gattReady.value) {
-                              await ble.initGattServer();
-                            }
-                            if (!ble.isAdvertising.value) {
-                              await ble.startAdvertising();
-                            } else {
-                              await ble.stopAdvertising();
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            backgroundColor: ble.isAdvertising.value
-                                ? const Color.fromRGBO(153, 153, 153, 1)
-                                : const Color.fromRGBO(142, 124, 195, 1),
-                          ),
-                          child: Text(
-                            ble.isAdvertising.value ? "STOP" : "START",
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-
-                  const SizedBox(width: 6),
-
-                  // Send Test JSON
-                  Expanded(
-                    child: SizedBox(
-                      height: 32,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          await ble.sendJsonToPhone({
-                            'message': '6767',
-                          });
-                        },
-                        style: ElevatedButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          backgroundColor:
-                              const Color.fromRGBO(142, 124, 195, 1),
-                        ),
-                        child: const Text(
-                          "Send Test",
-                          style: TextStyle(fontSize: 12, color: Colors.white),
-                        ),
+              // Start/Stop Advertising Button
+              Center(
+                child: SizedBox(
+                  width: 150,
+                  height: 28,
+                  child: Obx(() {
+                    return ElevatedButton(
+                      onPressed: () async {
+                        if (!ble.gattReady.value) {
+                          await ble.initGattServer();
+                        }
+                        if (!ble.isAdvertising.value) {
+                          await ble.startAdvertising();
+                        } else {
+                          await ble.stopAdvertising();
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        backgroundColor: ble.isAdvertising.value
+                            ? const Color.fromRGBO(153, 153, 153, 1)
+                            : const Color.fromRGBO(142, 124, 195, 1),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // JSON Output Box
-              Container(
-                width: 120,
-                height: 50, 
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: const Color.fromRGBO(153, 153, 153, 1),
-                  border: Border.all(color: Colors.black, width: 0.6),
-                ),
-                child: Obx(() {
-                  final cmd = ble.lastReceivedCommand.value;
-                  if (cmd == null) {
-                    return const Center(
                       child: Text(
-                        "No JSON received",
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 11,
+                        ble.isAdvertising.value ? "Stop Adv" : "Start Adv",
+                        style: const TextStyle(
+                          fontSize: 9,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     );
-                  }
+                  }),
+                ),
+              ),
 
-                  final pretty =
-                      const JsonEncoder.withIndent('  ').convert(cmd);
+              const SizedBox(height: 6),
 
-                  return SingleChildScrollView(
+              // Light/Dark Mode Button
+              Center(
+                child: SizedBox(
+                  width: 150,
+                  height: 28,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        isDarkMode = !isDarkMode;
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      backgroundColor: const Color.fromRGBO(142, 124, 195, 1),
+                    ),
                     child: Text(
-                      pretty,
+                      isDarkMode ? "Light Mode" : "Dark Mode",
                       style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 9,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  );
-                }),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 6),
+
+              // Log Out Button
+              Center(
+                child: SizedBox(
+                  width: 150,
+                  height: 28,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Handle logout
+                      Get.snackbar('Logout', 'User logged out');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      backgroundColor: Colors.red,
+                    ),
+                    child: const Text(
+                      "Log Out",
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Exit Button
+              Center(
+                child: SizedBox(
+                  width: 100,
+                  height: 22,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Get.back();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      backgroundColor: const Color.fromRGBO(100, 100, 100, 1),
+                    ),
+                    child: const Text(
+                      "Exit",
+                      style: TextStyle(
+                        fontSize: 8,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
         ),
       ),
-    ),
     );
   }
 }

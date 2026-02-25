@@ -4,7 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'game_page.dart'; 
-import 'shot_page.dart'; 
+import 'shot_input_page.dart';
 import '../controllers/session_controller.dart'; 
 
 // Global access to the controller
@@ -120,7 +120,7 @@ class _FrameShellState extends State<FrameShell> {
 					child: GestureDetector(
 						onLongPress: _enterFrameSelection,
 						onVerticalDragEnd: _onVerticalSwipe,
-						behavior: HitTestBehavior.opaque,
+						behavior: HitTestBehavior.translucent,
 						child: Stack(
 							fit: StackFit.expand,
 							children: [
@@ -243,35 +243,39 @@ class _BowlingFrameState extends State<BowlingFrame> {
 			: const NeverScrollableScrollPhysics();
 
 
-		return PageView.builder(
-			controller: _controller,
-			physics: scrollPhysics,
-			itemCount: itemCount,
-			itemBuilder: (context, pageIndex) { 
-				
-				final shotIndex = pageIndex;
-				
-				// Calculate the starting global shot number for this PageView
-				final shotsBeforeFrame = activeGame.frames
-					.take(widget.frameIndex)
-					.fold(0, (sum, f) => sum + f.shots.length);
-				final initialGlobalShot = shotsBeforeFrame + 1;
-				
-				final bool isCurrentInput = widget.isInputActive && (pageIndex == frame.shots.length);
-				
-				if (!widget.isInputActive && pageIndex >= frame.shots.length) {
-					return Container(color: widget.color);
-				}
-				
-				return BowlingShot(
-					key: ValueKey('${widget.frameIndex}-${shotIndex + 1}'),
-					color: widget.color,
-					frameIndex: widget.frameIndex,
-					shotIndex: shotIndex + 1,
-					globalShotNumber: initialGlobalShot + shotIndex,
-					isInputActive: isCurrentInput,
-				);
-			},
+		return Stack(
+			children: [
+				PageView.builder(
+					controller: _controller,
+					physics: scrollPhysics,
+					itemCount: itemCount,
+					itemBuilder: (context, pageIndex) { 
+						
+						final shotIndex = pageIndex;
+						
+						// Calculate the starting global shot number for this PageView
+						final shotsBeforeFrame = activeGame.frames
+							.take(widget.frameIndex)
+							.fold(0, (sum, f) => sum + f.shots.length);
+						final initialGlobalShot = shotsBeforeFrame + 1;
+						
+						final bool isCurrentInput = widget.isInputActive && (pageIndex == frame.shots.length);
+						
+						if (!widget.isInputActive && pageIndex >= frame.shots.length) {
+							return Container(color: widget.color);
+						}
+						
+						return BowlingShot(
+							key: ValueKey('${widget.frameIndex}-${shotIndex + 1}'),
+							color: widget.color,
+							frameIndex: widget.frameIndex,
+							shotIndex: shotIndex + 1,
+							globalShotNumber: initialGlobalShot + shotIndex,
+							isInputActive: isCurrentInput,
+						);
+					},
+				),
+			],
 		);
 	}
 }
@@ -454,11 +458,23 @@ class BowlingShot extends StatefulWidget {
 
 class _BowlingShotState extends State<BowlingShot> {
 	int lane = 1;
-	int board = 18;
+	int board = 0;
 	double speed = 15.0;
 	int ball = 1;
-	String? position;
+	int stance = 20;
 	List<bool> pinsDown = List.filled(10, false);
+
+	final List<String> _boardAbbreviations = [
+		'R',
+		'L',
+		'LP',
+		'P',
+		'HP',
+		'H',
+		'N',
+		'BR',
+		'LF',
+	];
 	@override
 	void didChangeDependencies() {
 		super.didChangeDependencies();
@@ -488,26 +504,30 @@ class _BowlingShotState extends State<BowlingShot> {
 			if (shotToDisplay != null) {
 				pinsDown = shotToDisplay.pinsState.map((isStanding) => !isStanding).toList();
 				lane = frame.lane;
-				board = shotToDisplay.hitBoard;
+				board = shotToDisplay.board;
 				speed = shotToDisplay.speed;
 				ball = shotToDisplay.ball;
-				position = shotToDisplay.position;
+				stance = _sessionController.defaultStanceByLane[lane] ?? 20;
 			} else {
-			pinsDown = List.filled(10, false);
+			// Shot hasn't been submitted yet
 			if (frame.shots.isNotEmpty) {
 				final lastShot = frame.shots.last;
+				// For shot 2 before submission, show pins from shot 1 (convert standing to knocked down format)
+				pinsDown = lastShot.pinsState.map((isStanding) => !isStanding).toList();
 				lane = frame.lane;
-				board = lastShot.hitBoard;
+				board = lastShot.board;
 				speed = lastShot.speed;
 				ball = lastShot.ball;
-				position = null;
+				stance = _sessionController.defaultStanceByLane[lane] ?? 20;
 			} else {
 				// Use controller-level defaults when this frame has no prior shots
-				lane = _sessionController.defaultLane;
+				pinsDown = List.filled(10, false);
+				// Auto-flip lane every frame: frame 1 = lane 1, frame 2 = lane 2, etc.
+				lane = (widget.frameIndex % 2 == 0) ? 1 : 2;
 				board = _sessionController.defaultBoard;
 				speed = _sessionController.defaultSpeed;
 				ball = _sessionController.defaultBall;
-				position = null;
+				stance = _sessionController.defaultStanceByLane[lane] ?? 20;
 			}
 			}
 		});
@@ -529,14 +549,16 @@ class _BowlingShotState extends State<BowlingShot> {
 		final shotResult = await Navigator.push<Map<String, dynamic>>(
 			context,
 			MaterialPageRoute(
-				builder: (_) => ShotPage(
+				builder: (_) => ShotInputPage(
 					initialPins: initialPinsStanding,
 					shotNumber: widget.globalShotNumber,
 					frameShotIndex: widget.shotIndex,
+					frameNumber: widget.frameIndex + 1,
 					initialLane: lane,
 					initialBoard: board,
 					initialBall: ball,
 					initialSpeed: speed,
+					initialStance: stance,
 					startInPost: shotToDisplay != null,
 					initialIsFoul: shotToDisplay?.isFoul,
 				),
@@ -551,6 +573,7 @@ class _BowlingShotState extends State<BowlingShot> {
 				board = (shotResult['board'] as int?) ?? board;
 				speed = (shotResult['speed'] as double?) ?? speed;
 				ball = (shotResult['ball'] as int?) ?? ball;
+				stance = (shotResult['stance'] as int?) ?? stance;
 			});
 
 			if (shotToDisplay != null) {
@@ -560,11 +583,11 @@ class _BowlingShotState extends State<BowlingShot> {
 					shotIndexInFrame: widget.shotIndex - 1,
 					lane: lane,
 					speed: speed,
-					hitBoard: board,
+					board: board,
 					ball: ball,
+					stance: stance,
 					standingPins: shotResult['pinsStanding'] as List<bool>,
 					pinsDownCount: shotResult['pinsDownCount'] as int,
-					position: (shotResult['outcome'] as String?) ?? (shotResult['pinsDownCount'] as int).toString(),
 					isFoul: shotResult['isFoul'] as bool,
 				);
 			} else {
@@ -584,11 +607,11 @@ class _BowlingShotState extends State<BowlingShot> {
 		_sessionController.recordShot(
 			lane: lane,
 			speed: speed,
-			hitBoard: board,
+			board: board,
 			ball: ball,
+			stance: stance,
 			standingPins: pinsStandingResult,
 			pinsDownCount: pinsDownCount,
-			position: outcome ?? pinsDownCount.toString(),
 			isFoul: isFoul,
 		);
 	}
@@ -600,37 +623,81 @@ class _BowlingShotState extends State<BowlingShot> {
 			children: [
 				Row(
 					mainAxisAlignment: MainAxisAlignment.center,
-					children: [7, 8, 9, 10].map((p) => _buildPin(p, pinsDownList)).toList(),
+					children: [7, 8, 9, 10].map((p) => _buildPin(p, pinsDownList, widget.shotIndex)).toList(),
 				),
 				const SizedBox(height: 3),
 				Row(
 					mainAxisAlignment: MainAxisAlignment.center,
-					children: [4, 5, 6].map((p) => _buildPin(p, pinsDownList)).toList(),
+					children: [4, 5, 6].map((p) => _buildPin(p, pinsDownList, widget.shotIndex)).toList(),
 				),
 				const SizedBox(height: 3),
 				Row(
 					mainAxisAlignment: MainAxisAlignment.center,
-					children: [2, 3].map((p) => _buildPin(p, pinsDownList)).toList(),
+					children: [2, 3].map((p) => _buildPin(p, pinsDownList, widget.shotIndex)).toList(),
 				),
 				const SizedBox(height: 3),
 				Row(
 					mainAxisAlignment: MainAxisAlignment.center,
-					children: [_buildPin(1, pinsDownList)],
+					children: [_buildPin(1, pinsDownList, widget.shotIndex)],
 				),
 			],
 		);
 	}
 
 
-	Widget _buildPin(int pinNumber, List<bool> pinsDownList) {
+	Widget _buildPin(int pinNumber, List<bool> pinsDownList, int shotIndex) {
 		final index = pinNumber - 1;
 		final isDown = pinsDownList[index];
+		final activeGame = _sessionController.currentSession!.games.first;
+		final frame = activeGame.frames[widget.frameIndex];
+		Color pinColor;
+		
+		// For shot 2, check if it's been submitted - if not, use shot 1 colors
+		final isShotSubmitted = frame.shots.length >= shotIndex;
+		
+		if (shotIndex == 1 || (shotIndex == 2 && !isShotSubmitted)) {
+			// Shot 1 colors OR shot 2 before submission: dark grey for knocked down, purple for standing
+			pinColor = isDown 
+				? const Color.fromRGBO(100, 100, 100, 1) // dark grey - knocked down
+				: const Color.fromRGBO(142, 124, 195, 1); // purple - standing
+		} else {
+			// Shot 2 after submission: show perspective colors (purple for available, red for standing)
+			final currentShot = frame.shots.length >= shotIndex ? frame.shots[shotIndex - 1] : null;
+			final isSpare = currentShot != null && (currentShot.pins & 0x3FF) == 0;
+			
+			if (isSpare) {
+				// Spare on shot 2: all pins knocked down - show dark grey
+				pinColor = const Color.fromRGBO(100, 100, 100, 1);
+			} else {
+				final previousShot = frame.shots.isNotEmpty ? frame.shots.first : null;
+				
+				if (previousShot == null) {
+					// No previous shot, treat as shot 1
+					pinColor = isDown 
+						? const Color.fromRGBO(100, 100, 100, 1)
+						: const Color.fromRGBO(142, 124, 195, 1);
+				} else {
+					final wasAvailable = previousShot.pinsState[index]; // true = was standing after shot 1
+					if (!wasAvailable) {
+						// Pin was knocked down in shot 1: dark grey
+						pinColor = const Color.fromRGBO(100, 100, 100, 1);
+					} else if (isDown) {
+						// Pin was available but got knocked down in shot 2: purple
+						pinColor = const Color.fromRGBO(142, 124, 195, 1);
+					} else {
+						// Pin is still standing after shot 2: red
+						pinColor = const Color.fromARGB(255, 255, 0, 0);
+					}
+				}
+			}
+		}
+		
 		return Container(
 			width: 18,
 			height: 18,
 			margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
 			decoration: BoxDecoration(
-				color: isDown ? const Color.fromRGBO(153, 153, 153, 1) : const Color.fromRGBO(142, 124, 195, 1),
+				color: pinColor,
 				shape: BoxShape.circle,
 				border: Border.all(color: Colors.black, width: 0.5),
 			),
@@ -640,6 +707,7 @@ class _BowlingShotState extends State<BowlingShot> {
 
 	Widget _buildInfoBar(int lane, int board, double speed, int ball) {
 		const double height = 50;
+		final boardDisplay = board >= 0 && board < _boardAbbreviations.length ? _boardAbbreviations[board] : board.toString();
 		return Container(
 			height: height,
 			padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -653,11 +721,11 @@ class _BowlingShotState extends State<BowlingShot> {
 				children: [
 					_buildInfoCell('Lane', lane.toString()),
 					_buildDivider(),
-					_buildInfoCell('Board', board.toString()),
+					_buildInfoCell('Board', boardDisplay),
 					_buildDivider(),
 					_buildInfoCell('Speed', speed.toStringAsFixed(1)),
 					_buildDivider(),
-					_buildInfoCell('Ball', '1'),
+					_buildInfoCell('Ball', ball.toString()),
 				],
 			),
 		);
@@ -701,42 +769,42 @@ class _BowlingShotState extends State<BowlingShot> {
 			backgroundColor: widget.color,
 			extendBodyBehindAppBar: true,
 			body: Center(
-				child: GestureDetector(
-					onTap: _openShotPage,
-					child: Container(
-						width: 280,
-						height: 280,
-						decoration: BoxDecoration(
-							color: widget.color,
-							shape: BoxShape.circle,
-						),
-						child: Column(
-							mainAxisAlignment: MainAxisAlignment.start,
-							children: [
-								const SizedBox(height: 24),
-								Text(
-									'Frame $displayFrameNumber — Shot ${widget.shotIndex}',
-									style: const TextStyle(
-										color: Colors.white,
-										fontSize: 14,
-										fontWeight: FontWeight.bold,
-									),
+				child: Container(
+					width: 280,
+					height: 280,
+					decoration: BoxDecoration(
+						color: widget.color,
+						shape: BoxShape.circle,
+					),
+					child: Column(
+						mainAxisAlignment: MainAxisAlignment.start,
+						children: [
+							GestureDetector(
+								onTap: _openShotPage,
+								behavior: HitTestBehavior.opaque,
+								child: Column(
+									mainAxisSize: MainAxisSize.min,
+									children: [
+										const SizedBox(height: 24),
+										Text(
+											'Frame $displayFrameNumber — Shot ${widget.shotIndex}',
+											style: const TextStyle(
+												color: Colors.white,
+												fontSize: 14,
+												fontWeight: FontWeight.bold,
+											),
+										),
+										const SizedBox(height: 12),
+										_buildPinDisplay(pinsDown),
+										const SizedBox(height: 6),
+									],
 								),
-								const SizedBox(height: 12),
-								_buildPinDisplay(pinsDown),
-								const SizedBox(height: 6),
-
-
-								GestureDetector(
-									onTap: null,
-									child: Transform.scale(
-										scale: 0.8,
-										child: _buildInfoBar(lane, board, speed, ball),
-									),
-								),
-							
-							],
-						),
+							),
+							Transform.scale(
+								scale: 0.8,
+								child: _buildInfoBar(lane, board, speed, ball),
+							),
+						],
 					),
 				),
 			),
