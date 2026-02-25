@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
 import '../controllers/ble_manager.dart';
+import '../controllers/packet_queue.dart';
+import '../models/shot.dart';
 
 class ShotInputPage extends StatefulWidget {
   final List<bool> initialPins;
   final int shotNumber;
   final int frameShotIndex;
+  final int frameNumber;
   final int initialLane;
   final int initialBoard;
   final int initialBall;
@@ -20,6 +23,7 @@ class ShotInputPage extends StatefulWidget {
     required this.initialPins,
     required this.shotNumber,
     required this.frameShotIndex,
+    required this.frameNumber,
     required this.initialLane,
     required this.initialBoard,
     required this.initialBall,
@@ -461,6 +465,27 @@ Widget _buildStanceSlider({double scale = 1.0}) {
 
   void _submit() {
     final pinsDownCount = _calculatePinsDown();
+
+    // Build the Shot model from all collected input data
+    final shot = Shot(
+      shotNumber: widget.shotNumber,
+      ball: _selectedBall,
+      numOfPinsKnocked: pinsDownCount,
+      pins: Shot.buildPins(standingPins: _selectedPins, isFoul: isFoul),
+      board: _selectedBoard,
+      stance: _stance,
+      speed: _selectedSpeed,
+      frameNum: widget.frameNumber,
+      lane: _selectedLane,
+    );
+
+    // Print the completed Shot object to the console
+    // ignore: avoid_print
+    print('Shot submitted: ${shot.toJson()}');
+
+    // Add the shot to the FCFS packet queue
+    PacketQueue.instance.enqueue(shot);
+
     Navigator.of(context).pop({
       'pinsStanding': _selectedPins,
       'pinsDownCount': pinsDownCount,

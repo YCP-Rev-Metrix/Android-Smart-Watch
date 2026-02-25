@@ -462,7 +462,6 @@ class _BowlingShotState extends State<BowlingShot> {
 	double speed = 15.0;
 	int ball = 1;
 	int stance = 20;
-	String? position;
 	List<bool> pinsDown = List.filled(10, false);
 
 	final List<String> _boardAbbreviations = [
@@ -505,10 +504,9 @@ class _BowlingShotState extends State<BowlingShot> {
 			if (shotToDisplay != null) {
 				pinsDown = shotToDisplay.pinsState.map((isStanding) => !isStanding).toList();
 				lane = frame.lane;
-				board = shotToDisplay.hitBoard;
+				board = shotToDisplay.board;
 				speed = shotToDisplay.speed;
 				ball = shotToDisplay.ball;
-				position = shotToDisplay.position;
 				stance = _sessionController.defaultStanceByLane[lane] ?? 20;
 			} else {
 			// Shot hasn't been submitted yet
@@ -517,10 +515,9 @@ class _BowlingShotState extends State<BowlingShot> {
 				// For shot 2 before submission, show pins from shot 1 (convert standing to knocked down format)
 				pinsDown = lastShot.pinsState.map((isStanding) => !isStanding).toList();
 				lane = frame.lane;
-				board = lastShot.hitBoard;
+				board = lastShot.board;
 				speed = lastShot.speed;
 				ball = lastShot.ball;
-				position = null;
 				stance = _sessionController.defaultStanceByLane[lane] ?? 20;
 			} else {
 				// Use controller-level defaults when this frame has no prior shots
@@ -530,7 +527,6 @@ class _BowlingShotState extends State<BowlingShot> {
 				board = _sessionController.defaultBoard;
 				speed = _sessionController.defaultSpeed;
 				ball = _sessionController.defaultBall;
-				position = null;
 				stance = _sessionController.defaultStanceByLane[lane] ?? 20;
 			}
 			}
@@ -557,6 +553,7 @@ class _BowlingShotState extends State<BowlingShot> {
 					initialPins: initialPinsStanding,
 					shotNumber: widget.globalShotNumber,
 					frameShotIndex: widget.shotIndex,
+					frameNumber: widget.frameIndex + 1,
 					initialLane: lane,
 					initialBoard: board,
 					initialBall: ball,
@@ -586,12 +583,11 @@ class _BowlingShotState extends State<BowlingShot> {
 					shotIndexInFrame: widget.shotIndex - 1,
 					lane: lane,
 					speed: speed,
-					hitBoard: board,
+					board: board,
 					ball: ball,
 					stance: stance,
 					standingPins: shotResult['pinsStanding'] as List<bool>,
 					pinsDownCount: shotResult['pinsDownCount'] as int,
-					position: (shotResult['outcome'] as String?) ?? (shotResult['pinsDownCount'] as int).toString(),
 					isFoul: shotResult['isFoul'] as bool,
 				);
 			} else {
@@ -611,12 +607,11 @@ class _BowlingShotState extends State<BowlingShot> {
 		_sessionController.recordShot(
 			lane: lane,
 			speed: speed,
-			hitBoard: board,
+			board: board,
 			ball: ball,
 			stance: stance,
 			standingPins: pinsStandingResult,
 			pinsDownCount: pinsDownCount,
-			position: outcome ?? pinsDownCount.toString(),
 			isFoul: isFoul,
 		);
 	}
@@ -668,7 +663,7 @@ class _BowlingShotState extends State<BowlingShot> {
 		} else {
 			// Shot 2 after submission: show perspective colors (purple for available, red for standing)
 			final currentShot = frame.shots.length >= shotIndex ? frame.shots[shotIndex - 1] : null;
-			final isSpare = currentShot?.position == '/';
+			final isSpare = currentShot != null && (currentShot.pins & 0x3FF) == 0;
 			
 			if (isSpare) {
 				// Spare on shot 2: all pins knocked down - show dark grey

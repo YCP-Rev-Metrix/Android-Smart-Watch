@@ -12,16 +12,17 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 10,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 10,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       expect(shot.shotNumber, 1);
-      expect(shot.count, 10);
+      expect(shot.numOfPinsKnocked, 10);
       expect(shot.ball, 1);
       expect(shot.speed, 15.5);
     });
@@ -30,12 +31,13 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 7,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 7,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       expect(shot.pinsStanding, 3); // 10 - 7 = 3
@@ -48,12 +50,13 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 10,
-        leaveType: leaveType,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 10,
+        pins: leaveType,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       expect(shot.isFoul, false);
@@ -66,12 +69,13 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 0,
-        leaveType: leaveType,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 0,
+        pins: leaveType,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       expect(shot.isFoul, true);
@@ -84,12 +88,13 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 6,
-        leaveType: leaveType,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 6,
+        pins: leaveType,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       expect(shot.pinsState, standingPins);
@@ -99,12 +104,13 @@ void main() {
       final originalShot = Shot(
         shotNumber: 5,
         ball: 2,
-        count: 8,
-        leaveType: 123,
-        position: 'left',
-        timestamp: DateTime(2025, 12, 10, 10, 30),
+        numOfPinsKnocked: 8,
+        pins: 123,
+        board: 20,
+        stance: 20,
         speed: 18.5,
-        hitBoard: 20,
+        frameNum: 3,
+        lane: 2,
       );
 
       final json = originalShot.toJson();
@@ -112,10 +118,9 @@ void main() {
 
       expect(restoredShot.shotNumber, originalShot.shotNumber);
       expect(restoredShot.ball, originalShot.ball);
-      expect(restoredShot.count, originalShot.count);
-      expect(restoredShot.position, originalShot.position);
+      expect(restoredShot.numOfPinsKnocked, originalShot.numOfPinsKnocked);
       expect(restoredShot.speed, originalShot.speed);
-      expect(restoredShot.hitBoard, originalShot.hitBoard);
+      expect(restoredShot.board, originalShot.board);
     });
   });
 
@@ -131,12 +136,13 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 10,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 10,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       final frame = Frame(frameNumber: 1, lane: 1).copyWithShot(shot);
@@ -147,22 +153,24 @@ void main() {
       final shot1 = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 5,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 5,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
       final shot2 = Shot(
         shotNumber: 2,
         ball: 1,
-        count: 5,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 5,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       var frame = Frame(frameNumber: 1, lane: 1).copyWithShot(shot1);
@@ -175,12 +183,13 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 9,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 9,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       final frame = Frame(frameNumber: 1, lane: 1).copyWithShot(shot);
@@ -191,22 +200,24 @@ void main() {
       final shot1 = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 5,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 5,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
       final shot2 = Shot(
         shotNumber: 2,
         ball: 1,
-        count: 3,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 3,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       var frame = Frame(frameNumber: 1, lane: 1).copyWithShot(shot1);
@@ -219,12 +230,13 @@ void main() {
       final shot1 = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 5,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 5,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       final frame1 = Frame(frameNumber: 1, lane: 1);
@@ -238,12 +250,13 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 7,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10, 10, 30),
+        numOfPinsKnocked: 7,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 3,
+        lane: 2,
       );
 
       var originalFrame = Frame(frameNumber: 3, lane: 2).copyWithShot(shot);
@@ -280,12 +293,13 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 10,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 10,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       // Add shot to all frames to mark them complete
@@ -404,12 +418,13 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 7,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10, 10, 30, 45),
+        numOfPinsKnocked: 7,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
       // Add shot to first frame
@@ -430,15 +445,16 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 10,
-        leaveType: 0,
-        position: 'pocket',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 10,
+        pins: 0,
+        board: 18,
+        stance: 20,
         speed: 15.5,
-        hitBoard: 18,
+        frameNum: 1,
+        lane: 1,
       );
 
-      expect(shot.count, 10);
+      expect(shot.numOfPinsKnocked, 10);
       expect(shot.pinsStanding, 0);
     });
 
@@ -446,15 +462,16 @@ void main() {
       final shot = Shot(
         shotNumber: 1,
         ball: 1,
-        count: 0,
-        leaveType: 1023, // All pins standing
-        position: 'gutter',
-        timestamp: DateTime(2025, 12, 10),
+        numOfPinsKnocked: 0,
+        pins: 1023, // All pins standing
+        board: 1,
+        stance: 20,
         speed: 0,
-        hitBoard: 1,
+        frameNum: 1,
+        lane: 1,
       );
 
-      expect(shot.count, 0);
+      expect(shot.numOfPinsKnocked, 0);
       expect(shot.pinsStanding, 10);
     });
 
@@ -470,12 +487,13 @@ void main() {
         final shot = Shot(
           shotNumber: i + 1,
           ball: 1,
-          count: 5,
-          leaveType: 0,
-          position: 'pocket',
-          timestamp: DateTime(2025, 12, 10),
+          numOfPinsKnocked: 5,
+          pins: 0,
+          board: 18,
+          stance: 20,
           speed: 15.5,
-          hitBoard: 18,
+          frameNum: i + 1,
+          lane: (i % 2) + 1,
         );
         game.frames[i] = game.frames[i].copyWithShot(shot);
       }
