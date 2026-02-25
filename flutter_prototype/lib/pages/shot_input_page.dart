@@ -8,6 +8,7 @@ class ShotInputPage extends StatefulWidget {
   final List<bool> initialPins;
   final int shotNumber;
   final int frameShotIndex;
+  final int frameNumber;
   final int initialLane;
   final int initialBoard;
   final int initialBall;
@@ -21,6 +22,7 @@ class ShotInputPage extends StatefulWidget {
     required this.initialPins,
     required this.shotNumber,
     required this.frameShotIndex,
+    required this.frameNumber,
     required this.initialLane,
     required this.initialBoard,
     required this.initialBall,
@@ -467,12 +469,13 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     final shot = Shot(
       shotNumber: widget.shotNumber,
       ball: _selectedBall,
-      count: pinsDownCount,
-      leaveType: Shot.buildLeaveType(standingPins: _selectedPins, isFoul: isFoul),
-      timestamp: DateTime.now(),
-      position: _selectedOutcome ?? pinsDownCount.toString(),
+      numOfPinsKnocked: pinsDownCount,
+      pins: Shot.buildPins(standingPins: _selectedPins, isFoul: isFoul),
+      board: _selectedBoard,
+      stance: _stance,
       speed: _selectedSpeed,
-      hitBoard: _selectedBoard,
+      frameNum: widget.frameNumber,
+      lane: _selectedLane,
     );
 
     // Print the completed Shot object to the console

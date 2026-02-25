@@ -39,12 +39,13 @@ class BLEPacketTestUtil {
         final shot = Shot(
           shotNumber: frameNum * 2 + shotNum + 1,
           ball: 1,
-          count: 5 + shotNum, // Pins knocked down
-          leaveType: leaveType,
-          position: 'pocket',
-          timestamp: DateTime.now().add(Duration(minutes: frameNum * 2, seconds: shotNum * 30)),
+          numOfPinsKnocked: 5 + shotNum, // Pins knocked down
+          pins: leaveType,
+          board: 18,
+          stance: 20,
           speed: 15.5 + (shotNum * 0.5),
-          hitBoard: 18,
+          frameNum: frameNum + 1,
+          lane: (frameNum % 2) + 1,
         );
         
         frame = frame.copyWithShot(shot);
@@ -90,12 +91,13 @@ class BLEPacketTestUtil {
     final shot = Shot(
       shotNumber: 1,
       ball: 1,
-      count: 10,
-      leaveType: leaveType,
-      position: 'pocket',
-      timestamp: DateTime.now(),
+      numOfPinsKnocked: 10,
+      pins: leaveType,
+      board: 18,
+      stance: 20,
       speed: 15.0,
-      hitBoard: 18,
+      frameNum: 1,
+      lane: 1,
     );
     
     frame = frame.copyWithShot(shot);
