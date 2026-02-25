@@ -90,22 +90,25 @@ class SessionController extends ChangeNotifier {
 
   // Initialize test data with a detailed first game
   Shot _createTestShot({
-    required int shotNumber, 
-    required int count, 
-    required List<bool> standingPins, 
+    required int shotNumber,
+    required int count,
+    required List<bool> standingPins,
     bool isFoul = false,
-    String position = 'Pocket',
+    int frameNum = 1,
+    int lane = 1,
+    int stance = 20,
   }) {
-    final leaveType = Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul);
+    final pins = Shot.buildPins(standingPins: standingPins, isFoul: isFoul);
     return Shot(
       shotNumber: shotNumber,
       ball: defaultBall,
-      count: count,
-      leaveType: leaveType,
-      timestamp: DateTime.now().add(Duration(seconds: shotNumber)),
-      position: position,
+      numOfPinsKnocked: count,
+      pins: pins,
+      board: 12 + (shotNumber % 5),
+      stance: stance,
       speed: defaultSpeed + (shotNumber % 3) * 0.1,
-      hitBoard: 12 + (shotNumber % 5),
+      frameNum: frameNum,
+      lane: lane,
     );
   }
 
@@ -118,7 +121,8 @@ class SessionController extends ChangeNotifier {
       shotNumber: globalShotCount++,
       count: 10,
       standingPins: List.filled(10, false),
-      position: 'Strike',
+      frameNum: 1,
+      lane: 1,
     );
     detailedFrames.add(Frame(
       frameNumber: 1, 
@@ -131,13 +135,15 @@ class SessionController extends ChangeNotifier {
       shotNumber: globalShotCount++,
       count: 7,
       standingPins: [false, false, false, false, false, false, false, true, true, true],
-      position: '7 Pin',
+      frameNum: 2,
+      lane: 2,
     );
     final shot3 = _createTestShot(
       shotNumber: globalShotCount++,
-      count: 3, 
+      count: 3,
       standingPins: List.filled(10, false),
-      position: 'Spare',
+      frameNum: 2,
+      lane: 2,
     );
     detailedFrames.add(Frame(
       frameNumber: 2, 
@@ -150,13 +156,15 @@ class SessionController extends ChangeNotifier {
       shotNumber: globalShotCount++,
       count: 8,
       standingPins: [false, true, false, false, false, false, false, false, false, false],
-      position: 'Pocket',
+      frameNum: 3,
+      lane: 1,
     );
     final shot5 = _createTestShot(
       shotNumber: globalShotCount++,
-      count: 1, 
+      count: 1,
       standingPins: [false, true, false, false, false, false, false, false, false, false],
-      position: 'Tap',
+      frameNum: 3,
+      lane: 1,
     );
     detailedFrames.add(Frame(
       frameNumber: 3, 
@@ -232,12 +240,11 @@ class SessionController extends ChangeNotifier {
   void recordShot({
     required int lane,
     required double speed,
-    required int hitBoard,
+    required int board,
     required int ball,
     required int stance,
-    required List<bool> standingPins, 
+    required List<bool> standingPins,
     required int pinsDownCount,
-    required String position,
     required bool isFoul,
   }) {
     // 1. Find the active Game and Frame
@@ -250,34 +257,25 @@ class SessionController extends ChangeNotifier {
 
     final oldFrame = activeGame.frames[activeFrameIndexForUpdate];
     
-    // Logger: print current active indices and shot counts before recording
-    try {
-      debugPrint('Recording shot - activeFrameIndex=$_activeFrameIndex, activeShotIndex=$_activeShotIndex');
-      for (var i = 0; i < activeGame.frames.length; i++) {
-        debugPrint('Game ${activeGame.gameNumber} Frame ${i + 1} shots=${activeGame.frames[i].shots.length}');
-      }
-    } catch (e) {
-      debugPrint('Diagnostic print failed: $e');
-    }
-
     final globalShotNumber = activeGame.frames.fold<int>(0, (sum, f) => sum + f.shots.length) + 1;
 
     // 2. Create the new Shot object
     final newShot = Shot(
       shotNumber: globalShotNumber,
-      ball: ball, 
-      count: pinsDownCount,
-      leaveType: Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul), 
-      timestamp: DateTime.now(),
-      position: position,
+      ball: ball,
+      numOfPinsKnocked: pinsDownCount,
+      pins: Shot.buildPins(standingPins: standingPins, isFoul: isFoul),
+      board: board,
+      stance: stance,
       speed: speed,
-      hitBoard: hitBoard,
+      frameNum: oldFrame.frameNumber,
+      lane: lane,
     );
 
     // 3. Create the new Frame (immutable update)
     final newFrame = Frame(
         frameNumber: oldFrame.frameNumber,
-        lane: lane, 
+        lane: lane,
         shots: [...oldFrame.shots, newShot],
     );
     
@@ -294,42 +292,9 @@ class SessionController extends ChangeNotifier {
     // Persist the user's last selections as global defaults for subsequent shots
     defaultLane = lane;
     defaultSpeed = speed;
-    defaultBoard = hitBoard;
+    defaultBoard = board;
     defaultBall = ball;
     defaultStanceByLane[lane] = stance;
-
-    // Logger: print shot info and frame shot counts after constructing newFrame/newGame but before assigning
-    try {
-      debugPrint('New shot created: shotNumber=$globalShotNumber, count=$pinsDownCount, position=$position, isFoul=$isFoul');
-      debugPrint('NewFrame shots count (will be): ${newFrame.shots.length} for frame ${newFrame.frameNumber}');
-    } catch (_) {}
-
-    // Build a nested JSON representation of the in-memory session (Session -> Games -> Frames -> Shots)
-    try {
-      final sessionMap = {
-        'sessionId': currentSession?.sessionId ?? '',
-        'games': currentSession!.games.map((g) => {
-              'gameNumber': g.gameNumber,
-              'totalScore': g.totalScore,
-              'frames': g.frames.map((f) => f.toJson()).toList(),
-            }).toList(),
-      };
-
-      // Logger: print the session JSON structure.
-      final pretty = const JsonEncoder.withIndent('  ').convert(sessionMap);
-      for (final line in pretty.split('\n')) {
-        debugPrint(line);
-      }
-      _saveSessionJsonToDocuments(pretty, filename: 'RevMetrix.json');
-      // Print per-game/frame shot counts to make it easy to see progress
-      for (var gi = 0; gi < currentSession!.games.length; gi++) {
-        final g = currentSession!.games[gi];
-        final frameShotCounts = g.frames.map((f) => f.shots.length).toList();
-        debugPrint('Game ${g.gameNumber} frame shot counts: $frameShotCounts');
-      }
-    } catch (e, st) {
-      debugPrint('Failed to build session JSON: $e\n$st');
-    }
 
     notifyListeners();
   }
@@ -380,12 +345,11 @@ class SessionController extends ChangeNotifier {
     required int shotIndexInFrame,
     required int lane,
     required double speed,
-    required int hitBoard,
+    required int board,
     required int ball,
     required int stance,
     required List<bool> standingPins,
     required int pinsDownCount,
-    required String position,
     required bool isFoul,
   }) {
     final activeGame = currentSession?.games.first;
@@ -397,16 +361,17 @@ class SessionController extends ChangeNotifier {
       if (shotIndexInFrame >= 0 && shotIndexInFrame < oldShots.length) {
         final oldShot = oldShots[shotIndexInFrame];
         
-        // 1. Create the new Shot object, maintaining the original shotNumber and timestamp
+        // 1. Create the new Shot object, maintaining the original shotNumber
         final updatedShot = Shot(
           shotNumber: oldShot.shotNumber,
-          ball: ball, 
-          count: pinsDownCount,
-          leaveType: Shot.buildLeaveType(standingPins: standingPins, isFoul: isFoul), 
-          timestamp: oldShot.timestamp,
-          position: position,
+          ball: ball,
+          numOfPinsKnocked: pinsDownCount,
+          pins: Shot.buildPins(standingPins: standingPins, isFoul: isFoul),
+          board: board,
+          stance: stance,
           speed: speed,
-          hitBoard: hitBoard,
+          frameNum: oldFrame.frameNumber,
+          lane: lane,
         );
 
         // 2. Create the new list of shots with the updated shot

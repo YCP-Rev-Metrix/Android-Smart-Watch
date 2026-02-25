@@ -179,6 +179,31 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                   ),
                 ),
               ),
+
+              const SizedBox(height: 10),
+
+              // Exit button
+              Center(
+                child: SizedBox(
+                  height: 28,
+                  width: 80,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      backgroundColor: const Color.fromRGBO(100, 100, 100, 1),
+                    ),
+                    child: const Text(
+                      "EXIT",
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),

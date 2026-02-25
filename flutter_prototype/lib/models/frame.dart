@@ -18,7 +18,7 @@ class Frame {
     if (shots.isEmpty) return false;
     
     // Check for a Strike (10 pins down on first shot)
-    if (shots.first.count == 10) return true; 
+    if (shots.first.numOfPinsKnocked == 10) return true; 
 
     // Check for a Spare or Open Frame (two shots taken)
     if (shots.length >= 2) return true;
@@ -28,7 +28,7 @@ class Frame {
   }
   
   /// Helper to get the total number of pins down in this frame
-  int get totalPinsDown => shots.fold(0, (sum, shot) => sum + shot.count);
+  int get totalPinsDown => shots.fold(0, (sum, shot) => sum + shot.numOfPinsKnocked);
   
   /// Method to return a new Frame with an added shot (maintaining immutability principles)
   Frame copyWithShot(Shot newShot) {

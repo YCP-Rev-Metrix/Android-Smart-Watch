@@ -163,11 +163,55 @@ class _BowlingGameState extends State<BowlingGame> {
   }
 
   void _removeGame() {
-    int currentCount = _sessionController.numOfGames;
-    if (currentCount > 1) { 
-      _sessionController.createNewSession(numOfGames: currentCount - 1);
-    }
-    HapticFeedback.lightImpact();
+    showDialog(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          backgroundColor: const Color.fromRGBO(80, 80, 80, 1),
+          titlePadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          actionsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          title: const Text(
+            'Remove Game',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          content: Text(
+            'Remove Game ${widget.index + 1}?',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: Colors.white70),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              style: TextButton.styleFrom(
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Cancel', style: TextStyle(fontSize: 12, color: Colors.white60)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                int currentCount = _sessionController.numOfGames;
+                if (currentCount > 1) {
+                  _sessionController.createNewSession(numOfGames: currentCount - 1);
+                }
+                HapticFeedback.lightImpact();
+              },
+              style: TextButton.styleFrom(
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Remove', style: TextStyle(color: Colors.red, fontSize: 12)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // Method to navigate to Dev Settings
