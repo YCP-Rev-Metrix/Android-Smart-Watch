@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
 import '../controllers/ble_manager.dart';
+import '../controllers/packet_queue.dart';
 import '../models/shot.dart';
 
 class ShotInputPage extends StatefulWidget {
@@ -481,6 +482,9 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     // Print the completed Shot object to the console
     // ignore: avoid_print
     print('Shot submitted: ${shot.toJson()}');
+
+    // Add the shot to the FCFS packet queue
+    PacketQueue.instance.enqueue(shot);
 
     Navigator.of(context).pop({
       'pinsStanding': _selectedPins,
