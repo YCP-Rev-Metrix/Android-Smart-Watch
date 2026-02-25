@@ -18,6 +18,10 @@ class BLEManager extends GetxController {
   var connectedDeviceAddress = ''.obs;
   var isConnected = false.obs;
 
+  // Chunk reassembly fields
+  final List<int> _incomingBuffer = [];
+  DateTime? _lastChunkTime;
+
   BLEManager() {
     // Register native callback handler early so we receive native events
     _channel.setMethodCallHandler(_handleNativeCalls);
@@ -101,22 +105,57 @@ class BLEManager extends GetxController {
             return null;
           }
 
-          final raw = utf8.decode(bytes);
+          // Chunk reassembly logic
+          final now = DateTime.now();
+          
+          // If more than 500ms since last chunk, start fresh
+          if (_lastChunkTime != null && now.difference(_lastChunkTime!) > Duration(milliseconds: 500)) {
+            print('WATCH BLE Timeout, clearing buffer');
+            _incomingBuffer.clear();
+          }
+          _lastChunkTime = now;
+          
+          // Add chunk to buffer
+          _incomingBuffer.addAll(bytes);
+          print('WATCH BLE Chunk received (${bytes.length} bytes), buffer size: ${_incomingBuffer.length}');
+          
+          // Try to parse as JSON
           try {
+            final raw = utf8.decode(_incomingBuffer);
             final parsed = json.decode(raw);
+            
+            // Success! We have complete JSON
+            print('WATCH BLE RECEIVED COMPLETE: $raw');
+            
             if (parsed is Map<String, dynamic>) {
               lastReceivedCommand.value = parsed;
+              
+              // Handle userData command
+              if (parsed['cmd'] == 'userData') {
+                print('WATCH BLE Username: ${parsed['username']}');
+                print('WATCH BLE Hand: ${parsed['hand']}');
+                print('WATCH BLE Sessions: ${parsed['sessions']}');
+                print('WATCH BLE Balls: ${parsed['balls']}');
+                
+                // Store this data in your watch app state
+              }
+              
+              await _showLocalNotification('Command received', 'Received ${parsed['cmd']}');
             } else {
               lastReceivedCommand.value = {'value': parsed};
             }
+            
+            // Clear buffer after successful parse
+            _incomingBuffer.clear();
+            _lastChunkTime = null;
+            
           } catch (e) {
-            lastReceivedCommand.value = {'raw': raw};
-          }
-          // Notify user that a command was received
-          try {
-            await _showLocalNotification('Command received', raw);
-          } catch (e) {
-            print('Notification error (command): $e');
+            // Not complete yet, wait for more chunks
+            if (_incomingBuffer.length > 1000) {
+              print('WATCH BLE Buffer too large, clearing');
+              _incomingBuffer.clear();
+              _lastChunkTime = null;
+            }
           }
           break;
 
