@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'controllers/ble_manager.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'pages/frame_page.dart';     // or your main page
+import 'pages/sessions_page.dart';     // or your main page
+import 'pages/home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -100,7 +102,7 @@ class _StartupWrapperState extends State<StartupWrapper> {
     }
 
     // After BLE setup, load your normal UI
-    return const FrameShell();  
+    return const HomePage();  
     // Or use DevSettings first:
     // return const DevSettingsPage();
   }
