@@ -25,7 +25,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -172,31 +172,6 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                       "Exit",
                       style: TextStyle(
                         fontSize: 8,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // Exit button
-              Center(
-                child: SizedBox(
-                  height: 28,
-                  width: 80,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      backgroundColor: const Color.fromRGBO(100, 100, 100, 1),
-                    ),
-                    child: const Text(
-                      "EXIT",
-                      style: TextStyle(
-                        fontSize: 11,
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
