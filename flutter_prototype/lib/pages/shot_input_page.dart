@@ -55,6 +55,9 @@ class _ShotInputPageState extends State<ShotInputPage> {
   int _selectedLane = 1;
   double _sliderPos = 20;
   int get _stance => 40 - _sliderPos.round();
+  double _approachBoard = 20.0;
+  double _targetBoard = 20.0;
+  double _breakpointBoard = 20.0;
 
   // Demo data for recent results
   final List<String> _recentBoards = ['Right', 'Light Pocket', 'Pocket'];
@@ -116,6 +119,186 @@ class _ShotInputPageState extends State<ShotInputPage> {
         _speedScrollController.jumpTo(screenCenterOffset);
       }
     });
+  }
+
+  Future<void> _showBoardPickerDialog(
+    String label,
+    double currentValue,
+    ValueChanged<double> onSelected,
+  ) async {
+    int intPart = currentValue.truncate();
+    int decPart = ((currentValue - intPart) * 10).round(); // 0 or 5
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            const double itemHeight = 40;
+            const double wheelHeight = 160;
+
+            Widget buildWheel({
+              required List<int> values,
+              required int selected,
+              required ValueChanged<int> onTap,
+              required Alignment alignment,
+              required EdgeInsets textPadding,
+            }) {
+              final controller = ScrollController();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final idx = values.indexOf(selected);
+                if (controller.hasClients && idx >= 0) {
+                  controller.jumpTo(
+                    (idx * itemHeight).clamp(
+                      0.0,
+                      ((values.length - 1) * itemHeight).toDouble(),
+                    ),
+                  );
+                }
+              });
+
+              return SizedBox(
+                height: wheelHeight,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: ShaderMask(
+                    shaderCallback: (rect) => const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.white,
+                        Colors.white,
+                        Colors.transparent,
+                      ],
+                      stops: [0.0, 0.15, 0.92, 1.0],
+                    ).createShader(rect),
+                    blendMode: BlendMode.dstIn,
+                    child: ListView.builder(
+                      controller: controller,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: values.length + 2,
+                      itemBuilder: (ctx, i) {
+                        if (i == 0) return const SizedBox(height: itemHeight);
+                        if (i == values.length + 1) {
+                          return const SizedBox(height: wheelHeight - itemHeight);
+                        }
+                        final idx2 = i - 1;
+                        final value = values[idx2];
+                        final isSel = value == selected;
+                        return GestureDetector(
+                          onTap: () {
+                            setDialogState(() => onTap(value));
+                            final targetOffset = (idx2 * itemHeight).clamp(
+                              0.0,
+                              ((values.length - 1) * itemHeight).toDouble(),
+                            );
+                            controller.animateTo(
+                              targetOffset,
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOut,
+                            );
+                          },
+                          child: Container(
+                            height: itemHeight,
+                            alignment: alignment,
+                            padding: textPadding,
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: Colors.black.withOpacity(0.2),
+                                  width: 0.8,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              '$value',
+                              style: TextStyle(
+                                color: isSel
+                                    ? Colors.white
+                                    : Colors.white.withOpacity(0.45),
+                                fontSize: isSel ? 28 : 20,
+                                fontWeight: isSel
+                                    ? FontWeight.w700
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            final intValues =
+                List<int>.generate(39, (i) => 39 - i); // 39..1
+            final decValues = [5, 0]; // 0.5 then 0.0
+
+            return AlertDialog(
+              backgroundColor: const Color.fromRGBO(50, 50, 50, 1),
+              titlePadding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+              contentPadding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
+              actionsPadding: const EdgeInsets.fromLTRB(0, 4, 8, 6),
+              title: Text(
+                label,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+              ),
+              content: SizedBox(
+                width: 200,
+                height: wheelHeight + 20,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: buildWheel(
+                        values: intValues,
+                        selected: intPart,
+                        onTap: (v) => intPart = v,
+                        alignment: Alignment.centerRight,
+                        textPadding: const EdgeInsets.only(right: 4),
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4, right: 4, top: 18),
+                      child: Text(
+                        '.',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: buildWheel(
+                        values: decValues,
+                        selected: decPart,
+                        onTap: (v) => decPart = v,
+                        alignment: Alignment.centerLeft,
+                        textPadding: const EdgeInsets.only(left: 4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    onSelected(intPart + decPart / 10.0);
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text(
+                    'OK',
+                    style: TextStyle(color: Colors.blueAccent),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _togglePin(int index) {
@@ -546,150 +729,153 @@ Widget _buildStanceSlider({double scale = 1.0}) {
               ],
             );
           } else if (index == 2) {
-            // Stance page with slider and lane dropdown
+            // Stance page with approach/target/breakpoint and lane
+            Widget boardRow(String label, double value, VoidCallback onTap) {
+              final displayVal = value % 1 == 0
+                  ? '${value.toInt()}'
+                  : value.toStringAsFixed(1);
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 90,
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: onTap,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color.fromRGBO(70, 70, 70, 1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                              color: Colors.grey[600]!, width: 1),
+                        ),
+                        child: Text(
+                          displayVal,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
             return Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 30, bottom: 4),
+                  padding: const EdgeInsets.only(top: 10, bottom: 4),
                   child: Text(
                     _titles[index],
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-                // Stance value with grey box and +/- buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                boardRow('Approach', _approachBoard, () async {
+                  await _showBoardPickerDialog(
+                    'Approach',
+                    _approachBoard,
+                    (v) => setState(() => _approachBoard = v),
+                  );
+                }),
+                boardRow('Target', _targetBoard, () async {
+                  await _showBoardPickerDialog(
+                    'Target',
+                    _targetBoard,
+                    (v) => setState(() => _targetBoard = v),
+                  );
+                }),
+                boardRow('Breakpoint', _breakpointBoard, () async {
+                  await _showBoardPickerDialog(
+                    'Breakpoint',
+                    _breakpointBoard,
+                    (v) => setState(() => _breakpointBoard = v),
+                  );
+                }),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          if (_sliderPos > 1) {
-                            _sliderPos = math.max(1.0, _sliderPos - 1);
-                          }
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color.fromRGBO(60, 60, 60, 1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          '+',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
+                    // Horizontal divider line
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color.fromRGBO(90, 90, 90, 1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '$_stance',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      width: MediaQuery.of(context).size.width * 0.7,
+                      height: 1,
+                      color: Colors.grey[600],
                     ),
-                    const SizedBox(width: 12),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          if (_sliderPos < 39) {
-                            _sliderPos = math.min(39.0, _sliderPos + 1);
-                          }
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color.fromRGBO(60, 60, 60, 1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          '-',
+                    const SizedBox(height: 6),
+                    // Lane dropdown (horizontal layout)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Lane',
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[400],
+                            fontSize: 12,
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 0),
+                          decoration: BoxDecoration(
+                            color: const Color.fromRGBO(90, 90, 90, 1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: DropdownButton<int>(
+                            value: _selectedLane,
+                            dropdownColor: const Color.fromRGBO(80, 80, 80, 1),
+                            underline: const SizedBox(),
+                            isDense: true,
+                            items: [
+                              DropdownMenuItem(
+                                value: 1,
+                                child: Text(
+                                  '1',
+                                  style: TextStyle(
+                                      color: Colors.white, fontSize: 12),
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 2,
+                                child: Text(
+                                  '2',
+                                  style: TextStyle(
+                                      color: Colors.white, fontSize: 12),
+                                ),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedLane = value ?? 1;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 8),
                   ],
                 ),
-                const SizedBox(height: 6),
-                _buildStanceSlider(scale: 1.0),
-                const SizedBox(height: 10),
-                // Horizontal divider line
-                Container(
-                  width: MediaQuery.of(context).size.width * 0.7,
-                  height: 1,
-                  color: Colors.grey[600],
-                ),
-                const SizedBox(height: 10),
-                // Lane dropdown (horizontal layout)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Lane',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-                      decoration: BoxDecoration(
-                        color: const Color.fromRGBO(90, 90, 90, 1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: DropdownButton<int>(
-                        value: _selectedLane,
-                        dropdownColor: const Color.fromRGBO(80, 80, 80, 1),
-                        underline: const SizedBox(),
-                        isDense: true,
-                        items: [
-                          DropdownMenuItem(
-                            value: 1,
-                            child: Text(
-                              '1',
-                              style: TextStyle(color: Colors.white, fontSize: 12),
-                            ),
-                          ),
-                          DropdownMenuItem(
-                            value: 2,
-                            child: Text(
-                              '2',
-                              style: TextStyle(color: Colors.white, fontSize: 12),
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedLane = value ?? 1;
-                          });
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
               ],
             );
           } else if (index == 4) {
