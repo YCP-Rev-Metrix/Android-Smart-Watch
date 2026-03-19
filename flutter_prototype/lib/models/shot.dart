@@ -4,25 +4,46 @@ class Shot {
   final int ball;
   final int numOfPinsKnocked;
   final int pins;
-  final int board;
-  final int stance;
+  final double impact;
+  final double stance;
+  final double target;
+  final double breakPoint;
   final double speed;
   final int frameNum;
   final int lane;
 
   static const int foulBit = 1 << 10;
+  static const Map<String, int> _impactBoardMap = {
+    'right': 11,
+    'light': 13,
+    'light pocket': 16,
+    'pocket': 17,
+    'high pocket': 18,
+    'high': 21,
+    'nose': 20,
+    'brooklyn': 23,
+    'left': 27,
+  };
 
   Shot({
     required this.shotNumber,
     required this.ball,
     required this.numOfPinsKnocked,
     required this.pins,
-    required this.board,
-    required this.stance,
+    num? impact,
+    num? board,
+    num? stance,
+    num? target,
+    num? breakPoint,
     required this.speed,
     required this.frameNum,
     required this.lane,
-  });
+  })  : impact = (impact ?? board ?? 17).toDouble(),
+        stance = (stance ?? 20).toDouble(),
+        target = (target ?? 20).toDouble(),
+        breakPoint = (breakPoint ?? 20).toDouble();
+
+  int get board => impact.round();
 
   /// Calculates the number of pins standing (10 - numOfPinsKnocked).
   int get pinsStanding => 10 - numOfPinsKnocked;
@@ -59,13 +80,21 @@ class Shot {
   static int buildLeaveType({required List<bool> standingPins, bool isFoul = false}) =>
       buildPins(standingPins: standingPins, isFoul: isFoul);
 
+  static int impactToBoard(String impact) {
+    final key = impact.trim().toLowerCase();
+    return _impactBoardMap[key] ?? 17;
+  }
+
   Map<String, dynamic> toJson() => {
     'shotNumber': shotNumber,
     'ball': ball,
     'numOfPinsKnocked': numOfPinsKnocked,
     'pins': pins,
-    'board': board,
+    'impact': impact,
+    'board': impact,
     'stance': stance,
+    'target': target,
+    'breakPoint': breakPoint,
     'speed': speed,
     'frameNum': frameNum,
     'lane': lane,
@@ -76,8 +105,10 @@ class Shot {
     ball: json['ball'] ?? 0,
     numOfPinsKnocked: json['numOfPinsKnocked'] ?? json['count'] ?? 0,
     pins: json['pins'] ?? json['leaveType'] ?? 0,
-    board: json['board'] ?? json['hitBoard'] ?? 18,
+    impact: (json['impact'] ?? json['board'] ?? json['hitBoard'] ?? 18),
     stance: json['stance'] ?? 20,
+    target: json['target'] ?? json['targetBoard'] ?? 20,
+    breakPoint: json['breakPoint'] ?? json['breakpoint'] ?? 20,
     speed: (json['speed'] ?? 0.0).toDouble(),
     frameNum: json['frameNum'] ?? 0,
     lane: json['lane'] ?? 1,

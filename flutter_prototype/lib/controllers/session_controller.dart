@@ -81,12 +81,14 @@ class SessionController extends ChangeNotifier {
 
   // Default selections for new shots
   int defaultLane = 1;
-  int defaultBoard = 0; // 0-based index: 0=Right
+  double defaultBoard = 17.0;
   int defaultBall = 3;
   double defaultSpeed = 15.5;
   
   // Per-lane stance defaults (lane 1 and lane 2)
-  Map<int, int> defaultStanceByLane = {1: 20, 2: 20};
+  Map<int, double> defaultStanceByLane = {1: 20.0, 2: 20.0};
+  Map<int, double> defaultTargetByLane = {1: 20.0, 2: 20.0};
+  Map<int, double> defaultBreakPointByLane = {1: 20.0, 2: 20.0};
 
   // Initialize test data with a detailed first game
   Shot _createTestShot({
@@ -96,7 +98,7 @@ class SessionController extends ChangeNotifier {
     bool isFoul = false,
     int frameNum = 1,
     int lane = 1,
-    int stance = 20,
+    double stance = 20.0,
   }) {
     final pins = Shot.buildPins(standingPins: standingPins, isFoul: isFoul);
     return Shot(
@@ -104,8 +106,10 @@ class SessionController extends ChangeNotifier {
       ball: defaultBall,
       numOfPinsKnocked: count,
       pins: pins,
-      board: 12 + (shotNumber % 5),
+      impact: 12 + (shotNumber % 5),
       stance: stance,
+      target: 20.0,
+      breakPoint: 20.0,
       speed: defaultSpeed + (shotNumber % 3) * 0.1,
       frameNum: frameNum,
       lane: lane,
@@ -240,9 +244,11 @@ class SessionController extends ChangeNotifier {
   void recordShot({
     required int lane,
     required double speed,
-    required int board,
+    required double impact,
     required int ball,
-    required int stance,
+    required double stance,
+    required double target,
+    required double breakPoint,
     required List<bool> standingPins,
     required int pinsDownCount,
     required bool isFoul,
@@ -265,8 +271,10 @@ class SessionController extends ChangeNotifier {
       ball: ball,
       numOfPinsKnocked: pinsDownCount,
       pins: Shot.buildPins(standingPins: standingPins, isFoul: isFoul),
-      board: board,
+      impact: impact,
       stance: stance,
+      target: target,
+      breakPoint: breakPoint,
       speed: speed,
       frameNum: oldFrame.frameNumber,
       lane: lane,
@@ -292,9 +300,11 @@ class SessionController extends ChangeNotifier {
     // Persist the user's last selections as global defaults for subsequent shots
     defaultLane = lane;
     defaultSpeed = speed;
-    defaultBoard = board;
+    defaultBoard = impact;
     defaultBall = ball;
     defaultStanceByLane[lane] = stance;
+    defaultTargetByLane[lane] = target;
+    defaultBreakPointByLane[lane] = breakPoint;
 
     notifyListeners();
   }
@@ -345,9 +355,11 @@ class SessionController extends ChangeNotifier {
     required int shotIndexInFrame,
     required int lane,
     required double speed,
-    required int board,
+    required double impact,
     required int ball,
-    required int stance,
+    required double stance,
+    required double target,
+    required double breakPoint,
     required List<bool> standingPins,
     required int pinsDownCount,
     required bool isFoul,
@@ -367,8 +379,10 @@ class SessionController extends ChangeNotifier {
           ball: ball,
           numOfPinsKnocked: pinsDownCount,
           pins: Shot.buildPins(standingPins: standingPins, isFoul: isFoul),
-          board: board,
+          impact: impact,
           stance: stance,
+          target: target,
+          breakPoint: breakPoint,
           speed: speed,
           frameNum: oldFrame.frameNumber,
           lane: lane,
@@ -412,6 +426,8 @@ class SessionController extends ChangeNotifier {
         }
         // Persist stance per lane when editing
         defaultStanceByLane[lane] = stance;
+        defaultTargetByLane[lane] = target;
+        defaultBreakPointByLane[lane] = breakPoint;
       }
     }
     

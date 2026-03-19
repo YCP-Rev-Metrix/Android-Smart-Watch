@@ -458,23 +458,13 @@ class BowlingShot extends StatefulWidget {
 
 class _BowlingShotState extends State<BowlingShot> {
 	int lane = 1;
-	int board = 0;
+	double board = 17.0;
 	double speed = 15.0;
 	int ball = 1;
-	int stance = 20;
+	double stance = 20.0;
+	double target = 20.0;
+	double breakPoint = 20.0;
 	List<bool> pinsDown = List.filled(10, false);
-
-	final List<String> _boardAbbreviations = [
-		'R',
-		'L',
-		'LP',
-		'P',
-		'HP',
-		'H',
-		'N',
-		'BR',
-		'LF',
-	];
 	@override
 	void didChangeDependencies() {
 		super.didChangeDependencies();
@@ -504,10 +494,12 @@ class _BowlingShotState extends State<BowlingShot> {
 			if (shotToDisplay != null) {
 				pinsDown = shotToDisplay.pinsState.map((isStanding) => !isStanding).toList();
 				lane = frame.lane;
-				board = shotToDisplay.board;
+				board = shotToDisplay.impact;
 				speed = shotToDisplay.speed;
 				ball = shotToDisplay.ball;
-				stance = _sessionController.defaultStanceByLane[lane] ?? 20;
+				stance = shotToDisplay.stance;
+				target = shotToDisplay.target;
+				breakPoint = shotToDisplay.breakPoint;
 			} else {
 			// Shot hasn't been submitted yet
 			if (frame.shots.isNotEmpty) {
@@ -515,10 +507,12 @@ class _BowlingShotState extends State<BowlingShot> {
 				// For shot 2 before submission, show pins from shot 1 (convert standing to knocked down format)
 				pinsDown = lastShot.pinsState.map((isStanding) => !isStanding).toList();
 				lane = frame.lane;
-				board = lastShot.board;
+				board = lastShot.impact;
 				speed = lastShot.speed;
 				ball = lastShot.ball;
-				stance = _sessionController.defaultStanceByLane[lane] ?? 20;
+				stance = lastShot.stance;
+				target = lastShot.target;
+				breakPoint = lastShot.breakPoint;
 			} else {
 				// Use controller-level defaults when this frame has no prior shots
 				pinsDown = List.filled(10, false);
@@ -527,7 +521,9 @@ class _BowlingShotState extends State<BowlingShot> {
 				board = _sessionController.defaultBoard;
 				speed = _sessionController.defaultSpeed;
 				ball = _sessionController.defaultBall;
-				stance = _sessionController.defaultStanceByLane[lane] ?? 20;
+				stance = _sessionController.defaultStanceByLane[lane] ?? 20.0;
+				target = _sessionController.defaultTargetByLane[lane] ?? 20.0;
+				breakPoint = _sessionController.defaultBreakPointByLane[lane] ?? 20.0;
 			}
 			}
 		});
@@ -555,10 +551,12 @@ class _BowlingShotState extends State<BowlingShot> {
 					frameShotIndex: widget.shotIndex,
 					frameNumber: widget.frameIndex + 1,
 					initialLane: lane,
-					initialBoard: board,
+					initialImpact: board,
 					initialBall: ball,
 					initialSpeed: speed,
 					initialStance: stance,
+					initialTarget: target,
+					initialBreakPoint: breakPoint,
 					startInPost: shotToDisplay != null,
 					initialIsFoul: shotToDisplay?.isFoul,
 				),
@@ -570,10 +568,12 @@ class _BowlingShotState extends State<BowlingShot> {
 			// Update the info bar values with selections returned from the shot page
 			setState(() {
 				lane = (shotResult['lane'] as int?) ?? lane;
-				board = (shotResult['board'] as int?) ?? board;
+				board = (shotResult['impact'] as num?)?.toDouble() ?? board;
 				speed = (shotResult['speed'] as double?) ?? speed;
 				ball = (shotResult['ball'] as int?) ?? ball;
-				stance = (shotResult['stance'] as int?) ?? stance;
+				stance = (shotResult['stance'] as num?)?.toDouble() ?? stance;
+				target = (shotResult['target'] as num?)?.toDouble() ?? target;
+				breakPoint = (shotResult['breakPoint'] as num?)?.toDouble() ?? breakPoint;
 			});
 
 			if (shotToDisplay != null) {
@@ -583,9 +583,11 @@ class _BowlingShotState extends State<BowlingShot> {
 					shotIndexInFrame: widget.shotIndex - 1,
 					lane: lane,
 					speed: speed,
-					board: board,
+					impact: board,
 					ball: ball,
 					stance: stance,
+					target: target,
+					breakPoint: breakPoint,
 					standingPins: shotResult['pinsStanding'] as List<bool>,
 					pinsDownCount: shotResult['pinsDownCount'] as int,
 					isFoul: shotResult['isFoul'] as bool,
@@ -601,15 +603,16 @@ class _BowlingShotState extends State<BowlingShot> {
 	void _recordShot(Map<String, dynamic> shotResult) {
 		final List<bool> pinsStandingResult = shotResult['pinsStanding'] as List<bool>;
 		final int pinsDownCount = shotResult['pinsDownCount'] as int;
-		final String? outcome = shotResult['outcome'] as String?;
 		final bool isFoul = shotResult['isFoul'] as bool;
 	
 		_sessionController.recordShot(
 			lane: lane,
 			speed: speed,
-			board: board,
+			impact: board,
 			ball: ball,
 			stance: stance,
+			target: target,
+			breakPoint: breakPoint,
 			standingPins: pinsStandingResult,
 			pinsDownCount: pinsDownCount,
 			isFoul: isFoul,
@@ -705,9 +708,9 @@ class _BowlingShotState extends State<BowlingShot> {
 	}
 
 
-	Widget _buildInfoBar(int lane, int board, double speed, int ball) {
-		const double height = 50;
-		final boardDisplay = board >= 0 && board < _boardAbbreviations.length ? _boardAbbreviations[board] : board.toString();
+	Widget _buildInfoBar(int lane, double board, double speed, int ball) {
+		const double height = 38;
+		final boardDisplay = board % 1 == 0 ? board.toInt().toString() : board.toStringAsFixed(1);
 		return Container(
 			height: height,
 			padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -721,7 +724,7 @@ class _BowlingShotState extends State<BowlingShot> {
 				children: [
 					_buildInfoCell('Lane', lane.toString()),
 					_buildDivider(),
-					_buildInfoCell('Board', boardDisplay),
+					_buildInfoCell('Impact', boardDisplay),
 					_buildDivider(),
 					_buildInfoCell('Speed', speed.toStringAsFixed(1)),
 					_buildDivider(),
@@ -742,17 +745,24 @@ class _BowlingShotState extends State<BowlingShot> {
 
 	Widget _buildInfoCell(String label, String value) {
 		return Container(
-			width: 36,
-			padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+			width: 32,
+			padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 0),
 			child: Column(
+				mainAxisSize: MainAxisSize.min,
+				mainAxisAlignment: MainAxisAlignment.center,
 				children: [
 					Text(
 						label,
-						style: const TextStyle(color: Colors.black, fontSize: 10),
+						maxLines: 1,
+						overflow: TextOverflow.ellipsis,
+						style: const TextStyle(color: Colors.black, fontSize: 8, height: 1.0),
 					),
+					const SizedBox(height: 1),
 					Text(
 						value,
-						style: const TextStyle(color: Colors.black, fontSize: 14),
+						maxLines: 1,
+						overflow: TextOverflow.ellipsis,
+						style: const TextStyle(color: Colors.black, fontSize: 11, height: 1.0),
 					),
 				],
 			),

@@ -11,10 +11,12 @@ class ShotInputPage extends StatefulWidget {
   final int frameShotIndex;
   final int frameNumber;
   final int initialLane;
-  final int initialBoard;
+  final double initialImpact;
   final int initialBall;
   final double initialSpeed;
-  final int initialStance;
+  final double initialStance;
+  final double initialTarget;
+  final double initialBreakPoint;
   final bool startInPost;
   final bool? initialIsFoul;
 
@@ -25,10 +27,12 @@ class ShotInputPage extends StatefulWidget {
     required this.frameShotIndex,
     required this.frameNumber,
     required this.initialLane,
-    required this.initialBoard,
+    required this.initialImpact,
     required this.initialBall,
     required this.initialSpeed,
     required this.initialStance,
+    required this.initialTarget,
+    required this.initialBreakPoint,
     required this.startInPost,
     this.initialIsFoul,
   });
@@ -42,7 +46,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
   late ScrollController _speedScrollController;
   int _currentPage = 0;
   int _selectedBall = 1;
-  int _selectedBoard = 0;
+  int _selectedBoard = 5;
   bool isFoul = false;
   double _selectedSpeed = 15;
   int _selectedSpeedInt = 15; // Integer part of speed (5-40)
@@ -55,7 +59,6 @@ class _ShotInputPageState extends State<ShotInputPage> {
   int _selectedLane = 1;
   double _sliderPos = 20;
   int get _stance => 40 - _sliderPos.round();
-  double _approachBoard = 20.0;
   double _targetBoard = 20.0;
   double _breakpointBoard = 20.0;
 
@@ -69,20 +72,20 @@ class _ShotInputPageState extends State<ShotInputPage> {
     'Stance',
     'Record',
     'Shot',
-    'Board',
+    'Impact',
     'Speed',
   ];
 
   final List<String> _boardOptions = [
-    'Right',
-    'Light',
-    'Light pocket',
-    'Pocket',
-    'High pocket',
-    'High',
-    'Nose',
-    'Brooklyn',
     'Left',
+    'Brooklyn',
+    'Nose',
+    'High',
+    'High pocket',
+    'Pocket',
+    'Light pocket',
+    'Light',
+    'Right',
   ];
 
   final List<double> _speedOptions = List.generate(
@@ -101,11 +104,18 @@ class _ShotInputPageState extends State<ShotInputPage> {
     
     // Initialize from widget parameters
     _selectedBall = widget.initialBall;
-    _selectedBoard = widget.initialBoard;
+    if (widget.startInPost) {
+      _selectedBoard = _resolveInitialImpactIndex(widget.initialImpact);
+    } else {
+      _selectedBoard = _boardOptions.indexOf('Pocket');
+    }
     _selectedLane = widget.initialLane;
     _selectedSpeed = widget.initialSpeed;
     _selectedSpeedInt = widget.initialSpeed.truncate();
     _selectedSpeedDecimal = ((widget.initialSpeed - widget.initialSpeed.truncate()) * 10).round();
+    _selectedStance = widget.initialStance;
+    _targetBoard = widget.initialTarget;
+    _breakpointBoard = widget.initialBreakPoint;
     _sliderPos = (40 - widget.initialStance).toDouble().clamp(1.0, 39.0);
     if (widget.initialIsFoul == true) {
       isFoul = true;
@@ -646,8 +656,21 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     return initialStanding - currentStanding;
   }
 
+  int _resolveInitialImpactIndex(double boardValue) {
+    final mappedIdx = _boardOptions.indexWhere(
+      (impact) => Shot.impactToBoard(impact).toDouble() == boardValue,
+    );
+    if (mappedIdx != -1) {
+      return mappedIdx;
+    }
+
+    return _boardOptions.indexOf('Pocket');
+  }
+
   void _submit() {
     final pinsDownCount = _calculatePinsDown();
+    final selectedImpact = _boardOptions[_selectedBoard];
+    final impactBoard = Shot.impactToBoard(selectedImpact).toDouble();
 
     // Build the Shot model from all collected input data
     final shot = Shot(
@@ -655,8 +678,10 @@ Widget _buildStanceSlider({double scale = 1.0}) {
       ball: _selectedBall,
       numOfPinsKnocked: pinsDownCount,
       pins: Shot.buildPins(standingPins: _selectedPins, isFoul: isFoul),
-      board: _selectedBoard,
-      stance: _stance,
+      impact: impactBoard,
+      stance: _selectedStance,
+      target: _targetBoard,
+      breakPoint: _breakpointBoard,
       speed: _selectedSpeed,
       frameNum: widget.frameNumber,
       lane: _selectedLane,
@@ -674,8 +699,11 @@ Widget _buildStanceSlider({double scale = 1.0}) {
       'pinsDownCount': pinsDownCount,
       'outcome': _selectedOutcome,
       'isFoul': isFoul,
-      'stance': _stance,
-      'board': _selectedBoard, // Direct index (0-8)
+      'stance': _selectedStance,
+      'target': _targetBoard,
+      'breakPoint': _breakpointBoard,
+      'impact': impactBoard,
+      'board': impactBoard,
       'lane': _selectedLane,
       'ball': _selectedBall,
       'speed': _selectedSpeed,
@@ -729,7 +757,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
               ],
             );
           } else if (index == 2) {
-            // Stance page with approach/target/breakpoint and lane
+            // Stance page with stance/target/breakpoint and lane
             Widget boardRow(String label, double value, VoidCallback onTap) {
               final displayVal = value % 1 == 0
                   ? '${value.toInt()}'
@@ -791,11 +819,11 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                     ),
                   ),
                 ),
-                boardRow('Approach', _approachBoard, () async {
+                boardRow('Stance', _selectedStance, () async {
                   await _showBoardPickerDialog(
-                    'Approach',
-                    _approachBoard,
-                    (v) => setState(() => _approachBoard = v),
+                    'Stance',
+                    _selectedStance,
+                    (v) => setState(() => _selectedStance = v),
                   );
                 }),
                 boardRow('Target', _targetBoard, () async {
@@ -913,7 +941,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
               ],
             );
           } else if (index == 5) {
-            // Board selector page
+            // Impact selector page
             return Column(
               children: [
                 Padding(
@@ -1040,9 +1068,9 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: [
-                          // Last 3 Boards
+                          // Last 3 Impacts
                           Text(
-                            'Last 3 Boards',
+                            'Last 3 Impacts',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 11,
