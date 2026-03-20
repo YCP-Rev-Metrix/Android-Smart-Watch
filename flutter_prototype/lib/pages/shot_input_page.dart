@@ -77,6 +77,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
   ];
 
   final List<String> _boardOptions = [
+    'Gutter',
     'Left',
     'Brooklyn',
     'Nose',
@@ -491,6 +492,7 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
            // Gutter: no pins were knocked down; clear outcome selection
            _selectedOutcome = null;
            isFoul = false;
+           _selectedBoard = _boardOptions.indexOf('Gutter');
          }
        });
      },

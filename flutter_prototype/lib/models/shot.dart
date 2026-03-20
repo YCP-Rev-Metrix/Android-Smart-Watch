@@ -14,6 +14,7 @@ class Shot {
 
   static const int foulBit = 1 << 10;
   static const Map<String, int> _impactBoardMap = {
+    'gutter': 0,
     'right': 11,
     'light': 13,
     'light pocket': 16,
