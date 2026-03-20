@@ -5,8 +5,9 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../models/frame.dart'; 
-import '../models/shot.dart'; 
+import '../models/frame.dart';
+import '../models/shot.dart';
+import '../models/account_packet.dart'; 
 
 // ----------------------------------------------------------------------
 // 1. Core Model Structure 
@@ -69,10 +70,15 @@ class SessionController extends ChangeNotifier {
   }
   SessionController._internal();
 
-  SessionModel? currentSession; 
-  
+  SessionModel? currentSession;
+
+  // Session context from account packet
+  int activeSessionId = 0;
+  List<Ball> activeBalls = const [];
+  int activeGameIndex = 0; // 0-based index into currentSession.games
+
   // _activeFrameIndex: 0-9 for the 10 main frames. Set to 10 for game over.
-  int _activeFrameIndex = 0; 
+  int _activeFrameIndex = 0;
   // _activeShotIndex: 1, 2, or 3 (for the 10th frame)
   int _activeShotIndex = 1; 
 
@@ -465,7 +471,31 @@ class SessionController extends ChangeNotifier {
   }
 
   void setActiveGame(int gameIndex) {
-    notifyListeners(); 
+    notifyListeners();
+  }
+
+  void initializeFromPacket({
+    required int sessionId,
+    required int gameNumber,
+    required int frameNumber,
+    required int shotNumber,
+    required List<Ball> balls,
+  }) {
+    activeSessionId = sessionId;
+    activeBalls = balls;
+    activeGameIndex = (gameNumber - 1).clamp(0, 9);
+    _activeFrameIndex = (frameNumber - 1).clamp(0, 9);
+    _activeShotIndex = shotNumber.clamp(1, 3);
+    notifyListeners();
+  }
+
+  void initializeAnonymous() {
+    activeSessionId = 0;
+    activeBalls = const [];
+    activeGameIndex = 0;
+    _activeFrameIndex = 0;
+    _activeShotIndex = 1;
+    notifyListeners();
   }
 }
 

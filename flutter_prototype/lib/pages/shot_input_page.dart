@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
+import 'package:get/get.dart';
 import '../controllers/ble_manager.dart';
 import '../controllers/packet_queue.dart';
+import '../controllers/session_controller.dart';
 import '../models/shot.dart';
+import '../models/account_packet.dart';
 
 class ShotInputPage extends StatefulWidget {
   final List<bool> initialPins;
@@ -17,6 +20,7 @@ class ShotInputPage extends StatefulWidget {
   final int initialStance;
   final bool startInPost;
   final bool? initialIsFoul;
+  final List<Ball>? balls;
 
   const ShotInputPage({
     super.key,
@@ -31,6 +35,7 @@ class ShotInputPage extends StatefulWidget {
     required this.initialStance,
     required this.startInPost,
     this.initialIsFoul,
+    this.balls,
   });
 
   @override
@@ -323,7 +328,7 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
     } else {
       // Start recording
       setState(() => _isRecording = true);
-      await BLEManager().sendRecordingCommand("startRec");
+      await Get.find<BLEManager>().sendRecordingCommand("startRec");
       // Auto-stop after 30 seconds
       _recordingTimer = Timer(const Duration(seconds: 30), () {
         _stopRecording();
@@ -444,7 +449,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     if (_isRecording) {
       _recordingTimer?.cancel();
       _recordingTimer = null;
-      await BLEManager().sendRecordingCommand("stopRec");
+      await Get.find<BLEManager>().sendRecordingCommand("stopRec");
       setState(() => _isRecording = false);
     }
   }
@@ -486,6 +491,21 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     // Add the shot to the FCFS packet queue
     PacketQueue.instance.enqueue(shot);
 
+    // Send the shot packet over BLE immediately
+    final sc = SessionController();
+    final bleBytes = shot.encodeToBinary(
+      sessionId: sc.activeSessionId,
+      gameNumber: sc.activeGameIndex + 1,
+      shotIndexInFrame: widget.frameShotIndex,
+    );
+    try {
+      Get.find<BLEManager>().sendRawBLEPacket(bleBytes);
+    } catch (e) {
+      // BLEManager not available (non-Android or not connected) — log and continue
+      // ignore: avoid_print
+      print('BLE send failed: $e');
+    }
+
     Navigator.of(context).pop({
       'pinsStanding': _selectedPins,
       'pinsDownCount': pinsDownCount,
@@ -510,6 +530,12 @@ Widget _buildStanceSlider({double scale = 1.0}) {
         itemBuilder: (context, index) {
           if (index == 1) {
             // Ball selector page
+            final effectiveBalls = (widget.balls != null && widget.balls!.isNotEmpty)
+                ? widget.balls!
+                : List.generate(4, (i) => Ball(id: i + 1, name: 'Ball ${i + 1}'));
+            final selectedIndex = effectiveBalls.indexWhere((b) => b.id == _selectedBall);
+            final safeSelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+
             return Column(
               children: [
                 Padding(
@@ -531,12 +557,12 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       children: [
                         Expanded(
                           child: _buildVerticalListPicker(
-                            items: List.generate(4, (i) => 'Ball ${i + 1}'),
-                            selectedIndex: _selectedBall - 1,
+                            items: effectiveBalls.map((b) => b.name).toList(),
+                            selectedIndex: safeSelectedIndex,
                             onSelectionChanged: (index) {
-                              setState(() => _selectedBall = index + 1);
+                              setState(() => _selectedBall = effectiveBalls[index].id);
                             },
-                            labelFormatter: (index) => 'Ball ${index + 1}',
+                            labelFormatter: (index) => effectiveBalls[index].name,
                           ),
                         ),
                       ],

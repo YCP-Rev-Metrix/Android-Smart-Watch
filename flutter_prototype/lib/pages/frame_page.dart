@@ -546,6 +546,8 @@ class _BowlingShotState extends State<BowlingShot> {
 			? shotToDisplay.pinsState
 			: (widget.shotIndex == 1 ? List.filled(10, true) : activeGame.frames[widget.frameIndex].shots.last.pinsState);
 
+		final balls = _sessionController.activeBalls;
+
 		final shotResult = await Navigator.push<Map<String, dynamic>>(
 			context,
 			MaterialPageRoute(
@@ -561,6 +563,7 @@ class _BowlingShotState extends State<BowlingShot> {
 					initialStance: stance,
 					startInPost: shotToDisplay != null,
 					initialIsFoul: shotToDisplay?.isFoul,
+					balls: balls.isEmpty ? null : balls,
 				),
 			),
 		);

@@ -37,6 +37,7 @@ class _GameShellState extends State<GameShell> {
   void initState() {
     super.initState();
     _sessionController.addListener(_onSessionChange);
+    _activeGame = _sessionController.activeGameIndex;
     _updateActiveGameSafety();
   }
 
