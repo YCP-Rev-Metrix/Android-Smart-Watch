@@ -136,6 +136,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
     String label,
     double currentValue,
     ValueChanged<double> onSelected,
+    {int maxWholeBoard = 40}
   ) async {
     int intPart = currentValue.truncate();
     int decPart = ((currentValue - intPart) * 10).round(); // 0 or 5
@@ -244,17 +245,22 @@ class _ShotInputPageState extends State<ShotInputPage> {
             }
 
             final intValues =
-                List<int>.generate(39, (i) => 39 - i); // 39..1
+              List<int>.generate(maxWholeBoard, (i) => maxWholeBoard - i); // max..1
             final decValues = [5, 0]; // 0.5 then 0.0
 
             return AlertDialog(
-              backgroundColor: const Color.fromRGBO(50, 50, 50, 1),
-              titlePadding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-              contentPadding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
-              actionsPadding: const EdgeInsets.fromLTRB(0, 4, 8, 6),
+              backgroundColor: const Color.fromRGBO(80, 80, 80, 1),
+              titlePadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              actionsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               title: Text(
                 label,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               content: SizedBox(
                 width: 200,
@@ -293,15 +299,35 @@ class _ShotInputPageState extends State<ShotInputPage> {
                   ],
                 ),
               ),
+              actionsAlignment: MainAxisAlignment.center,
               actions: [
                 TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: TextButton.styleFrom(
+                    minimumSize: Size.zero,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontSize: 12, color: Colors.white60),
+                  ),
+                ),
+                TextButton(
                   onPressed: () {
-                    onSelected(intPart + decPart / 10.0);
+                    final selectedValue = intPart + decPart / 10.0;
+                    final bounded = selectedValue.clamp(1.0, maxWholeBoard.toDouble());
+                    onSelected(bounded.toDouble());
                     Navigator.of(context).pop();
                   },
+                  style: TextButton.styleFrom(
+                    minimumSize: Size.zero,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   child: const Text(
-                    'OK',
-                    style: TextStyle(color: Colors.blueAccent),
+                    'Apply',
+                    style: TextStyle(color: Color.fromRGBO(152, 124, 229, 1), fontSize: 12),
                   ),
                 ),
               ],
@@ -826,6 +852,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                     'Stance',
                     _selectedStance,
                     (v) => setState(() => _selectedStance = v),
+                    maxWholeBoard: 50,
                   );
                 }),
                 boardRow('Target', _targetBoard, () async {
@@ -833,6 +860,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                     'Target',
                     _targetBoard,
                     (v) => setState(() => _targetBoard = v),
+                    maxWholeBoard: 40,
                   );
                 }),
                 boardRow('Breakpoint', _breakpointBoard, () async {
@@ -840,6 +868,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                     'Breakpoint',
                     _breakpointBoard,
                     (v) => setState(() => _breakpointBoard = v),
+                    maxWholeBoard: 40,
                   );
                 }),
                 Column(
