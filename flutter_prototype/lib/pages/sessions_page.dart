@@ -34,32 +34,37 @@ class _SessionsPageState extends State<SessionsPage> {
                 final username = Get.find<BLEManager>().lastAccountPacket.value?.username ?? 'Guest';
                 return Text(
                   'Welcome $username',
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 16,
                     fontWeight: FontWeight.w500,
                     color: Colors.white,
                   ),
                 );
               }),
 
-              const SizedBox(height: 2),
+              const SizedBox(height: 15),
 
               // Event name button (only shown when account packet available)
               Obx(() {
                 final packet = Get.find<BLEManager>().lastAccountPacket.value;
                 if (packet == null) return const SizedBox.shrink();
-                return _sessionButton(
-                  label: packet.eventName.isEmpty ? 'Event Session' : packet.eventName,
-                  onPressed: () => _startEventSession(packet),
+                return Center(
+                  child: _sessionButton(
+                    label: packet.eventName.isEmpty ? 'Event Session' : packet.eventName,
+                    onPressed: () => _startEventSession(packet),
+                  ),
                 );
               }),
 
-              const SizedBox(height: 3),
+              const SizedBox(height: 10),
 
               // Anonymous session button (always shown)
-              _sessionButton(
-                label: 'Anonymous',
-                onPressed: _startAnonymousSession,
+              Center(
+                child: _sessionButton(
+                  label: 'Anonymous',
+                  onPressed: _startAnonymousSession,
+                ),
               ),
             ],
           ),
@@ -70,8 +75,8 @@ class _SessionsPageState extends State<SessionsPage> {
 
   Widget _sessionButton({required String label, required VoidCallback onPressed}) {
     return SizedBox(
-      width: double.infinity,
-      height: 28,
+      width: 150,
+      height: 50,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           padding: EdgeInsets.zero,
@@ -81,7 +86,7 @@ class _SessionsPageState extends State<SessionsPage> {
         child: Text(
           label,
           style: const TextStyle(
-            fontSize: 9,
+            fontSize: 14,
             color: Colors.white,
             fontWeight: FontWeight.bold,
           ),
