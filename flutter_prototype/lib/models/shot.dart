@@ -162,8 +162,6 @@ class Shot {
     int packetType = 0x03,
     int version1 = 1,
     int? version2,
-    int? target,
-    int? breakPoint,
     int shotIndexInFrame = 1,
   }) {
     const int packetSize = 23; // 22 byte payload + 1 byte padding
@@ -214,13 +212,13 @@ class Shot {
     buffer[idx++] = pins & 0xFF;
 
     // Byte 12: Stance (0-100, stored as x2 for 0.5 values)
-    buffer[idx++] = (stance * 2) & 0xFF;
+    buffer[idx++] = ((stance * 2).toInt()) & 0xFF;
 
     // Byte 13: Target (0-100, stored as x2 for 0.5 values)
-    buffer[idx++] = ((target ?? 0) * 2) & 0xFF;
+    buffer[idx++] = ((target * 2).toInt()) & 0xFF;
 
     // Byte 14: Break Point (0-100, stored as x2 for 0.5 values)
-    buffer[idx++] = ((breakPoint ?? 0) * 2) & 0xFF;
+    buffer[idx++] = ((breakPoint * 2).toInt()) & 0xFF;
 
     // Byte 15: Impact/Board (0-100, stored as x2 for 0.5 values)
     // board is stored as x2 (e.g., 18.5 -> 37)
@@ -324,7 +322,7 @@ class Shot {
       ball: ball,
       numOfPinsKnocked: 0, // Not encoded in new format
       pins: pins,
-      board: board.toInt(),
+      board: board,
       stance: stance,
       speed: speed,
       frameNum: frameNumber,
