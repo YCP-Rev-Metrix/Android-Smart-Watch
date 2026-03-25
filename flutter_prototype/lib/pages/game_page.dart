@@ -37,6 +37,7 @@ class _GameShellState extends State<GameShell> {
   void initState() {
     super.initState();
     _sessionController.addListener(_onSessionChange);
+    _activeGame = _sessionController.activeGameIndex;
     _updateActiveGameSafety();
   }
 
@@ -229,70 +230,77 @@ class _BowlingGameState extends State<BowlingGame> {
         ? _sessionController.currentSession!.games[widget.index]
         : null;
 
+    // Use the game number and count from the session controller (from the account packet)
     final String displayScore = currentGame?.totalScore.toString() ?? '---';
-    final int currentCount = widget.gameCount; 
+    final int gameNum = _sessionController.currentGameNumber;
+    final int gameCountVal = _sessionController.currentGameCount;
     
-    return GestureDetector(
-      onVerticalDragEnd: _onVerticalSwipe,
-      behavior: HitTestBehavior.opaque,
-      child: Scaffold(
-        backgroundColor: widget.color,
-        body: Center(
-          child: Container(
-            width: 280,
-            height: 280,
-            decoration: const BoxDecoration(
-              color: Color.fromRGBO(67, 67, 67, 1),
-              shape: BoxShape.circle,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Game ${widget.index + 1} of $currentCount', 
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+    return ListenableBuilder(
+      listenable: _sessionController,
+      builder: (context, child) {
+        return GestureDetector(
+          onVerticalDragEnd: _onVerticalSwipe,
+          behavior: HitTestBehavior.opaque,
+          child: Scaffold(
+            backgroundColor: widget.color,
+            body: Center(
+              child: Container(
+                width: 280,
+                height: 280,
+                decoration: const BoxDecoration(
+                  color: Color.fromRGBO(67, 67, 67, 1),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Score: $displayScore',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                Row(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
-                      onPressed: _removeGame,
-                      tooltip: 'Remove Game',
+                    Text(
+                      'Game $gameNum of $gameCountVal', 
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      icon: const Icon(Icons.settings, color: Colors.white70),
-                      onPressed: _openSettings,
-                      tooltip: 'Dev Settings',
+                    const SizedBox(height: 8),
+                    Text(
+                      'Score: $displayScore',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
                     ),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline, color: Colors.green),
-                      onPressed: _addGame,
-                      tooltip: 'Add Game',
+                    const SizedBox(height: 24),
+                    
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                          onPressed: _removeGame,
+                          tooltip: 'Remove Game',
+                        ),
+                        const SizedBox(width: 10),
+                        IconButton(
+                          icon: const Icon(Icons.settings, color: Colors.white70),
+                          onPressed: _openSettings,
+                          tooltip: 'Dev Settings',
+                        ),
+                        const SizedBox(width: 10),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                          onPressed: _addGame,
+                          tooltip: 'Add Game',
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
