@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../models/account_packet.dart';
 
 
 class BLEManager extends GetxController {
@@ -21,6 +22,9 @@ class BLEManager extends GetxController {
   // Chunk reassembly fields
   final List<int> _incomingBuffer = [];
   DateTime? _lastChunkTime;
+
+  // Account packet data
+  Rxn<AccountPacket> lastAccountPacket = Rxn<AccountPacket>();
 
   BLEManager() {
     // Register native callback handler early so we receive native events
@@ -118,43 +122,20 @@ class BLEManager extends GetxController {
           // Add chunk to buffer
           _incomingBuffer.addAll(bytes);
           print('WATCH BLE Chunk received (${bytes.length} bytes), buffer size: ${_incomingBuffer.length}');
-          
-          // Try to parse as JSON
-          try {
-            final raw = utf8.decode(_incomingBuffer);
-            final parsed = json.decode(raw);
-            
-            // Success! We have complete JSON
-            print('WATCH BLE RECEIVED COMPLETE: $raw');
-            
-            if (parsed is Map<String, dynamic>) {
-              lastReceivedCommand.value = parsed;
-              
-              // Handle userData command
-              if (parsed['cmd'] == 'userData') {
-                print('WATCH BLE Username: ${parsed['username']}');
-                print('WATCH BLE Hand: ${parsed['hand']}');
-                print('WATCH BLE Sessions: ${parsed['sessions']}');
-                print('WATCH BLE Balls: ${parsed['balls']}');
-                
-                // Store this data in your watch app state
-              }
-              
-              await _showLocalNotification('Command received', 'Received ${parsed['cmd']}');
+
+          // Log raw hex for debugging
+          print('WATCH BLE Raw bytes: ${bytes.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+
+          // Determine packet type from first byte
+          if (_incomingBuffer.isNotEmpty) {
+            final packetType = _incomingBuffer[0];
+
+            if (packetType == 0x01) {
+              // Account packet - try to parse as binary
+              await _tryParseAccountPacket();
             } else {
-              lastReceivedCommand.value = {'value': parsed};
-            }
-            
-            // Clear buffer after successful parse
-            _incomingBuffer.clear();
-            _lastChunkTime = null;
-            
-          } catch (e) {
-            // Not complete yet, wait for more chunks
-            if (_incomingBuffer.length > 1000) {
-              print('WATCH BLE Buffer too large, clearing');
-              _incomingBuffer.clear();
-              _lastChunkTime = null;
+              // Other packet type - try JSON
+              _tryParseJsonPacket();
             }
           }
           break;
@@ -334,6 +315,112 @@ class BLEManager extends GetxController {
 
   Future<void> stopRecording() async {
     await sendRecordingCommand("stopRec");
+  }
+
+  /// Try to parse the buffer as an account packet (type 0x01)
+  Future<void> _tryParseAccountPacket() async {
+    try {
+      // Check if packet length byte is present (it's the last byte of the header)
+      if (_incomingBuffer.length < 4) {
+        print('WATCH BLE Account packet too short, waiting for more data');
+        return;
+      }
+
+      // The packet length is at a specific position - we need to find it
+      // For now, assume it's at position 3 (after type, v1, v2)
+      // But we need to account for optional v2 byte
+      final v1Byte = _incomingBuffer[1];
+      final hasVersion2 = (v1Byte & 0x80) != 0;
+      final lengthIndex = hasVersion2 ? 3 : 2;
+
+      if (_incomingBuffer.length < lengthIndex + 1) {
+        print('WATCH BLE Account packet header incomplete');
+        return;
+      }
+
+      final payloadLength = _incomingBuffer[lengthIndex];
+      // Total packet size = header (3 or 4 bytes) + payload
+      final headerSize = hasVersion2 ? 4 : 3;
+      final totalPacketSize = headerSize + payloadLength;
+
+      print('WATCH BLE Account packet payload length: $payloadLength, total with header: $totalPacketSize, current buffer: ${_incomingBuffer.length}');
+
+      if (_incomingBuffer.length < totalPacketSize) {
+        print('WATCH BLE Waiting for complete account packet ($totalPacketSize bytes total)');
+        return;
+      }
+
+      // We have a complete packet
+      final completePacket = _incomingBuffer.sublist(0, totalPacketSize);
+      print('WATCH BLE *** COMPLETE ACCOUNT PACKET (0x01) RECEIVED ***');
+      print('WATCH BLE Packet hex: ${completePacket.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+
+      // Parse it
+      final account = AccountPacket.fromBinary(completePacket);
+      lastAccountPacket.value = account;
+
+      await _showLocalNotification('User Data Received', 'Username: ${account.username}');
+
+      // Remove this packet from buffer and check for more
+      _incomingBuffer.removeRange(0, totalPacketSize);
+      _lastChunkTime = null;
+
+      // Recursively check if there's another packet in buffer
+      if (_incomingBuffer.isNotEmpty) {
+        await _tryParseAccountPacket();
+      }
+    } catch (e) {
+      print('WATCH BLE Error parsing account packet: $e');
+      print('WATCH BLE Buffer contents (hex):');
+      final hex = _incomingBuffer.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ');
+      print('$hex');
+      print('WATCH BLE Buffer size: ${_incomingBuffer.length} bytes');
+      print('WATCH BLE First bytes: [0x${_incomingBuffer[0].toRadixString(16).padLeft(2, '0')}, 0x${_incomingBuffer[1].toRadixString(16).padLeft(2, '0')}, 0x${_incomingBuffer.length > 2 ? _incomingBuffer[2].toRadixString(16).padLeft(2, '0') : '??'}]');
+
+      if (_incomingBuffer.length > 1000) {
+        print('WATCH BLE Buffer too large, clearing');
+        _incomingBuffer.clear();
+        _lastChunkTime = null;
+      }
+    }
+  }
+
+  /// Try to parse the buffer as JSON
+  void _tryParseJsonPacket() {
+    try {
+      final raw = utf8.decode(_incomingBuffer);
+      final parsed = json.decode(raw);
+
+      // Success! We have complete JSON
+      print('WATCH BLE RECEIVED COMPLETE JSON: $raw');
+
+      if (parsed is Map<String, dynamic>) {
+        lastReceivedCommand.value = parsed;
+
+        // Handle userData command
+        if (parsed['cmd'] == 'userData') {
+          print('WATCH BLE Username: ${parsed['username']}');
+          print('WATCH BLE Hand: ${parsed['hand']}');
+          print('WATCH BLE Sessions: ${parsed['sessions']}');
+          print('WATCH BLE Balls: ${parsed['balls']}');
+        }
+
+        _showLocalNotification('Command received', 'Received ${parsed['cmd']}');
+      } else {
+        lastReceivedCommand.value = {'value': parsed};
+      }
+
+      // Clear buffer after successful parse
+      _incomingBuffer.clear();
+      _lastChunkTime = null;
+    } catch (e) {
+      // Not complete yet, wait for more chunks
+      if (_incomingBuffer.length > 1000) {
+        print('WATCH BLE JSON buffer too large, clearing');
+        _incomingBuffer.clear();
+        _lastChunkTime = null;
+      }
+    }
   }
 
 }

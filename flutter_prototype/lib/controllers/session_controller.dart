@@ -5,8 +5,12 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../models/frame.dart'; 
-import '../models/shot.dart'; 
+import 'package:get/get.dart';
+import '../models/frame.dart';
+import '../models/shot.dart';
+import '../models/account_packet.dart';
+import '../utils/bowling_scorer.dart';
+import './ble_manager.dart'; 
 
 // ----------------------------------------------------------------------
 // 1. Core Model Structure 
@@ -15,15 +19,20 @@ import '../models/shot.dart';
 class Game {
   final int gameNumber;
   final List<Frame> frames;
-  final int totalScore; 
+  final int? incomingScore; // Score from the phone (used as reference)
+  final int startingFrameIndex; // which frame index (0-based) the phone was on when session started
 
-  Game({required this.gameNumber, required this.frames, required this.totalScore});
+  Game({required this.gameNumber, required this.frames, this.incomingScore, this.startingFrameIndex = 0});
 
-  static Game createEmpty(int gameNumber, int totalScore) {
+  /// Calculate the total score based on frames and incoming score
+  int get totalScore => BowlingScorer.calculateGameScore(frames, incomingScore: incomingScore, startingFrameIndex: startingFrameIndex);
+
+  static Game createEmpty(int gameNumber, {int? incomingScore, int startingFrameIndex = 0}) {
     return Game(
       gameNumber: gameNumber,
       frames: List.generate(10, (i) => Frame(frameNumber: i + 1, lane: 1)),
-      totalScore: totalScore,
+      incomingScore: incomingScore,
+      startingFrameIndex: startingFrameIndex,
     );
   }
   
@@ -35,7 +44,8 @@ class Game {
     return Game(
       gameNumber: gameNumber,
       frames: updatedFrames,
-      totalScore: totalScore, 
+      incomingScore: incomingScore,
+      startingFrameIndex: startingFrameIndex,
     );
   }
 }
@@ -62,17 +72,22 @@ class SessionController extends ChangeNotifier {
   static final SessionController _instance = SessionController._internal();
   
   factory SessionController() {
-    if (_instance.currentSession == null) {
-      _instance._initializeHardcodedSession();
-    }
     return _instance;
   }
   SessionController._internal();
 
-  SessionModel? currentSession; 
-  
+  SessionModel? currentSession;
+
+  // Session context from account packet
+  int activeSessionId = 0;
+  List<Ball> activeBalls = const [];
+  int activeGameIndex = 0; // 0-based index into currentSession.games
+  int currentGameNumber = 1; // Current game number from packet (1-based)
+  int currentGameCount = 1; // Total number of games in this session
+  int currentGameScore = 0; // Current game's score from packet
+
   // _activeFrameIndex: 0-9 for the 10 main frames. Set to 10 for game over.
-  int _activeFrameIndex = 0; 
+  int _activeFrameIndex = 0;
   // _activeShotIndex: 1, 2, or 3 (for the 10th frame)
   int _activeShotIndex = 1; 
 
@@ -90,7 +105,7 @@ class SessionController extends ChangeNotifier {
   Map<int, double> defaultTargetByLane = {1: 20.0, 2: 20.0};
   Map<int, double> defaultBreakPointByLane = {1: 20.0, 2: 20.0};
 
-  // Initialize test data with a detailed first game
+  /// Helper to create test shots (for manual testing/debugging only)
   Shot _createTestShot({
     required int shotNumber,
     required int count,
@@ -116,6 +131,23 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  /// Create a list of empty games with optional test scores (for manual testing/debugging only)
+  List<Game> _createSimpleTestGames(int count) {
+    return List.generate(count, (gameIndex) {
+      final int testScore = switch (gameIndex) {
+        0 => 120, 
+        1 => 80, 
+        2 => 55, 
+        3 => 90, 
+        4 => 85, 
+        _ => 0,
+      };
+      
+      return Game.createEmpty(gameIndex + 1, incomingScore: testScore);
+    });
+  }
+
+  /// Manually initialize test data (for manual testing/debugging only - NOT called automatically)
   void _initializeTestData() {
     int globalShotCount = 1;
     final List<Frame> detailedFrames = [];
@@ -183,7 +215,6 @@ class SessionController extends ChangeNotifier {
       shots: const [] 
     ));
 
-
     // Pad the rest of the game with empty frames up to 10
     int currentFrameCount = detailedFrames.length;
     final emptyFrames = List.generate(10 - currentFrameCount, (index) => Frame(
@@ -192,53 +223,36 @@ class SessionController extends ChangeNotifier {
       shots: const [],
     ));
 
-    //Create the Game object
+    // Create the Game object
     final testGame = Game(
       gameNumber: 1,
       frames: [...detailedFrames, ...emptyFrames],
-      totalScore: 59, 
+      incomingScore: 59, 
     );
     
-    // Create the full test session
+    // Create additional test games
     final simpleGames = _createSimpleTestGames(6); 
     currentSession = SessionModel(
       games: [testGame, ...simpleGames], 
     );
     
-    // Set active input position after initializing test data (Frame 4, Shot 1)
+    // Set active input position
     _activeFrameIndex = 3; 
     _activeShotIndex = 1;
   }
-  
-  List<Game> _createSimpleTestGames(int count) {
-    return List.generate(count, (gameIndex) {
-      final int testScore = switch (gameIndex) {
-        0 => 120, 
-        1 => 80, 
-        2 => 55, 
-        3 => 90, 
-        4 => 85, 
-        _ => 0,
-      };
-      
-      return Game.createEmpty(gameIndex + 2, testScore);
-    });
-  }
 
-  void _initializeHardcodedSession() {
-    _initializeTestData(); 
+  /// Manually create a new session with test data (for manual testing/debugging only - NOT called automatically)
+  void createNewSession({int numOfGames = 3}) {
+    final newGames = _createSimpleTestGames(numOfGames);
+    createNewSessionFromPacket(newGames);
   }
 
   void createNewSessionFromPacket(List<Game> parsedGames) {
     currentSession = SessionModel(games: parsedGames);
+    currentGameCount = parsedGames.length; // Update game count to match new session
     _activeFrameIndex = 0;
     _activeShotIndex = 1;
     notifyListeners(); 
-  }
-
-  void createNewSession({int numOfGames = 3}) {
-    final newGames = _createSimpleTestGames(numOfGames);
-    createNewSessionFromPacket(newGames);
   }
 
   void recordShot({
@@ -254,7 +268,9 @@ class SessionController extends ChangeNotifier {
     required bool isFoul,
   }) {
     // 1. Find the active Game and Frame
-    final activeGame = currentSession?.games.first; 
+    final activeGame = (currentSession != null && activeGameIndex < currentSession!.games.length)
+        ? currentSession!.games[activeGameIndex]
+        : null;
     // Use the stored active index
     final activeFrameIndexForUpdate = _activeFrameIndex;
 
@@ -262,12 +278,10 @@ class SessionController extends ChangeNotifier {
     if (activeGame == null || activeFrameIndexForUpdate >= 10) return;
 
     final oldFrame = activeGame.frames[activeFrameIndexForUpdate];
-    
-    final globalShotNumber = activeGame.frames.fold<int>(0, (sum, f) => sum + f.shots.length) + 1;
 
     // 2. Create the new Shot object
     final newShot = Shot(
-      shotNumber: globalShotNumber,
+      shotNumber: oldFrame.shots.length,  // 0-based: 0 for first, 1 for second
       ball: ball,
       numOfPinsKnocked: pinsDownCount,
       pins: Shot.buildPins(standingPins: standingPins, isFoul: isFoul),
@@ -290,10 +304,10 @@ class SessionController extends ChangeNotifier {
     // 4. Create the new Game (immutable update)
     final newGame = activeGame.copyWithFrame(index: activeFrameIndexForUpdate, newFrame: newFrame);
     
-    // 5. Update the session
-    currentSession = SessionModel(
-      games: [newGame, ...currentSession!.games.skip(1)],
-    );
+    // 5. Update the session - replace the game at activeGameIndex
+    final updatedGames = List<Game>.from(currentSession!.games);
+    updatedGames[activeGameIndex] = newGame;
+    currentSession = SessionModel(games: updatedGames);
 
     _advanceFrameAndShot(newFrame);
 
@@ -306,7 +320,44 @@ class SessionController extends ChangeNotifier {
     defaultTargetByLane[lane] = target;
     defaultBreakPointByLane[lane] = breakPoint;
 
+    // 6. Send shot packet to phone via BLE
+    _sendShotPacket(newShot, activeGame.gameNumber, newFrame.shots.length);
+
     notifyListeners();
+  }
+
+  /// Sends the recorded shot to the phone via BLE
+  Future<void> _sendShotPacket(Shot shot, int gameNumber, int shotIndexInFrame) async {
+    try {
+      // Get the active game to access its total score
+      final activeGame = (currentSession != null && activeGameIndex < currentSession!.games.length)
+          ? currentSession!.games[activeGameIndex]
+          : null;
+      
+      if (activeGame == null) return;
+      
+      // Encode shot to binary packet with game score
+      final packet = shot.encodeToBinary(
+        sessionId: activeSessionId,
+        gameNumber: gameNumber,
+        gameScore: activeGame.totalScore,
+        shotIndexInFrame: shotIndexInFrame,
+      );
+
+      // Log the packet
+      final hexPacket = packet.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ');
+      print('WATCH SESSION: Sending shot packet (${packet.length} bytes):');
+      print('WATCH SESSION Packet hex: $hexPacket');
+      print('WATCH SESSION Details - SessionId: $activeSessionId, Game: $gameNumber, Frame: ${shot.frameNum}, Shot: $shotIndexInFrame');
+
+      // Send via BLEManager
+      final bleManager = Get.find<BLEManager>();
+      await bleManager.sendRawBLEPacket(packet);
+
+      print('WATCH SESSION: Shot packet sent to phone successfully');
+    } catch (e) {
+      print('WATCH SESSION ERROR: Failed to send shot packet: $e');
+    }
   }
 
   // Logic to determine the next input location (Frame/Shot)
@@ -364,7 +415,9 @@ class SessionController extends ChangeNotifier {
     required int pinsDownCount,
     required bool isFoul,
   }) {
-    final activeGame = currentSession?.games.first;
+    final activeGame = (currentSession != null && activeGameIndex < currentSession!.games.length)
+        ? currentSession!.games[activeGameIndex]
+        : null;
 
     if (activeGame != null && frameIndex >= 0 && frameIndex < activeGame.frames.length) {
       final oldFrame = activeGame.frames[frameIndex];
@@ -402,10 +455,10 @@ class SessionController extends ChangeNotifier {
         // 4. Create the new Game (immutable update)
         final newGame = activeGame.copyWithFrame(index: frameIndex, newFrame: newFrame);
         
-        // 5. Update the session
-        currentSession = SessionModel(
-          games: [newGame, ...currentSession!.games.skip(1)],
-        );
+        // 5. Update the session - replace the game at activeGameIndex
+        final updatedGames = List<Game>.from(currentSession!.games);
+        updatedGames[activeGameIndex] = newGame;
+        currentSession = SessionModel(games: updatedGames);
         
         try {
           final sessionMap = {
@@ -481,7 +534,87 @@ class SessionController extends ChangeNotifier {
   }
 
   void setActiveGame(int gameIndex) {
-    notifyListeners(); 
+    activeGameIndex = gameIndex;
+    currentGameNumber = gameIndex + 1; // Convert 0-based index to 1-based game number
+    notifyListeners();
+  }
+
+  void initializeFromPacket({
+    required int sessionId,
+    required int gameNumber,
+    required int frameNumber,
+    required int shotNumber,
+    required List<Ball> balls,
+    List<bool>? previousPinsStanding,
+    int gameCount = 1,
+    int gameScore = 0,
+  }) {
+    activeSessionId = sessionId;
+    activeBalls = balls;
+    activeGameIndex = (gameNumber - 1).clamp(0, 9);
+    currentGameNumber = gameNumber;
+    currentGameCount = gameCount.clamp(1, 10);
+    currentGameScore = gameScore;
+    _activeFrameIndex = (frameNumber - 1).clamp(0, 9);
+    _activeShotIndex = shotNumber.clamp(1, 3); // shotNumber: 1-based (1=shot1, 2=shot2)
+    
+    // Calculate starting frame index: frames on the phone don't need to be calculated locally
+    final startingFrameIdx = (frameNumber - 1).clamp(0, 9); // Skip frames before the current one
+    
+    // Create a fresh session with empty games
+    final newGames = List.generate(currentGameCount, (gameIdx) {
+      final score = (gameIdx == activeGameIndex) ? gameScore : 0;
+      final frameIdx = (gameIdx == activeGameIndex) ? startingFrameIdx : 0;
+      return Game.createEmpty(gameIdx + 1, incomingScore: score, startingFrameIndex: frameIdx);
+    });
+    
+    // If shot 2 or higher, create read-only shot 1 with previous pins on the active frame
+    if (shotNumber >= 2 && previousPinsStanding != null) {
+      final activeGame = newGames[activeGameIndex];
+      final currentFrame = activeGame.frames[_activeFrameIndex];
+      
+      final readOnlyShot = Shot.readOnlyDefault(
+        frameNum: frameNumber,
+        lane: currentFrame.lane,
+        standingPins: previousPinsStanding,
+      );
+      
+      // Create updated frame with the read-only shot
+      final updatedFrame = Frame(
+        frameNumber: currentFrame.frameNumber,
+        lane: currentFrame.lane,
+        shots: [readOnlyShot],
+      );
+      
+      // Update the game with the new frame
+      final updatedGame = activeGame.copyWithFrame(
+        index: _activeFrameIndex,
+        newFrame: updatedFrame,
+      );
+      newGames[activeGameIndex] = updatedGame;
+    }
+    
+    currentSession = SessionModel(games: newGames);
+    
+    notifyListeners();
+  }
+
+  void initializeAnonymous() {
+    // Use a high reserved session ID (0xFFFFFFFF) so phone knows this is an anonymous/test session
+    // Phone can recognize this and handle appropriately (not associated with any stored session)
+    activeSessionId = 0xFFFFFFFF;
+    activeBalls = const [];
+    activeGameIndex = 0;
+    _activeFrameIndex = 0;
+    _activeShotIndex = 1;
+    
+    // Create a fresh empty session with 1 game
+    final newGames = [
+      Game.createEmpty(1, incomingScore: 0),
+    ];
+    currentSession = SessionModel(games: newGames);
+    
+    notifyListeners();
   }
 }
 

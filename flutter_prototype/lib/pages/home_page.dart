@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/ble_manager.dart';
+import '../controllers/session_controller.dart';
 import 'frame_page.dart';
 import 'sessions_page.dart';
 
@@ -78,6 +79,8 @@ class _HomePageState extends State<HomePage> {
               height: 40,
               child: ElevatedButton(
                 onPressed: () {
+                  // Initialize anonymous session (zero everything out for testing)
+                  SessionController().initializeAnonymous();
                   // Navigate to Frame page for offline mode
                   Get.to(() => const FrameShell());
                 },

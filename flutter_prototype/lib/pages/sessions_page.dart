@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'frame_page.dart';
+import '../controllers/ble_manager.dart';
+import '../controllers/session_controller.dart';
+import '../models/account_packet.dart';
 
 class SessionsPage extends StatefulWidget {
   const SessionsPage({super.key});
@@ -26,122 +29,41 @@ class _SessionsPageState extends State<SessionsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Welcome message
-              const Text(
-                'Welcome Username',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white,
-                ),
-              ),
-
-              const SizedBox(height: 2),
-
-              // Session 1 Button
-              SizedBox(
-                width: double.infinity,
-                height: 28,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Handle session 1
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    backgroundColor: const Color.fromRGBO(153, 153, 153, 1),
+              // Welcome message - dynamic username from BLE
+              Obx(() {
+                final username = Get.find<BLEManager>().lastAccountPacket.value?.username ?? 'Guest';
+                return Text(
+                  'Welcome $username',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
                   ),
-                  child: const Text(
-                    "Session 1",
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                );
+              }),
+
+              const SizedBox(height: 15),
+
+              // Event name button (only shown when account packet available)
+              Obx(() {
+                final packet = Get.find<BLEManager>().lastAccountPacket.value;
+                if (packet == null) return const SizedBox.shrink();
+                return Center(
+                  child: _sessionButton(
+                    label: packet.eventName.isEmpty ? 'Event Session' : packet.eventName,
+                    onPressed: () => _startEventSession(packet),
                   ),
-                ),
-              ),
+                );
+              }),
 
-              const SizedBox(height: 3),
+              const SizedBox(height: 10),
 
-              // Session 2 Button
-              SizedBox(
-                width: double.infinity,
-                height: 28,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Handle session 2
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    backgroundColor: const Color.fromRGBO(153, 153, 153, 1),
-                  ),
-                  child: const Text(
-                    "Session 2",
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 3),
-
-              // Session 3 Button
-              SizedBox(
-                width: double.infinity,
-                height: 28,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Handle session 3
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    backgroundColor: const Color.fromRGBO(153, 153, 153, 1),
-                  ),
-                  child: const Text(
-                    "Session 3",
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 4),
-
-              // Horizontal divider
-              const Divider(
-                thickness: 1,
-                color: Colors.grey,
-              ),
-
-              const SizedBox(height: 4),
-
-              // New Session Button (same style as others but smaller/narrower)
-              SizedBox(
-                width: 80,
-                height: 28,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Navigate to Frame page for new session
-                    Get.to(() => const FrameShell());
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    backgroundColor: const Color.fromRGBO(153, 153, 153, 1),
-                  ),
-                  child: const Text(
-                    "+ New",
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+              // Anonymous session button (always shown)
+              Center(
+                child: _sessionButton(
+                  label: 'Anonymous',
+                  onPressed: _startAnonymousSession,
                 ),
               ),
             ],
@@ -149,5 +71,63 @@ class _SessionsPageState extends State<SessionsPage> {
         ),
       ),
     );
+  }
+
+  Widget _sessionButton({required String label, required VoidCallback onPressed}) {
+    return SizedBox(
+      width: 150,
+      height: 50,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          backgroundColor: const Color.fromRGBO(153, 153, 153, 1),
+        ),
+        onPressed: onPressed,
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _startEventSession(AccountPacket packet) {
+    final gameNum = (packet.gameNumber == null || packet.gameNumber == 0) ? 1 : packet.gameNumber!;
+    final frameNum = (packet.frameNumber == null || packet.frameNumber == 0) ? 1 : packet.frameNumber!;
+    final shotNum = (packet.shotNumber == null || packet.shotNumber == 0) ? 1 : packet.shotNumber!;
+    final gameCountVal = (packet.gameCount == null || packet.gameCount == 0) ? 1 : packet.gameCount!;
+    final gameScoreVal = packet.gameScore ?? 0;
+    
+    // Convert previousPins bitmask to List<bool> (true = standing, false = knocked down)
+    List<bool>? previousPinsStanding;
+    if (packet.previousPins != null && shotNum >= 2) {
+      previousPinsStanding = List.filled(10, false);
+      for (int i = 0; i < 10; i++) {
+        if ((packet.previousPins! & (1 << i)) != 0) {
+          previousPinsStanding[i] = true; // Pin is standing
+        }
+      }
+    }
+    
+    SessionController().initializeFromPacket(
+      sessionId: packet.sessionId,
+      gameNumber: gameNum,
+      frameNumber: frameNum,
+      shotNumber: shotNum,
+      balls: packet.balls,
+      previousPinsStanding: previousPinsStanding,
+      gameCount: gameCountVal,
+      gameScore: gameScoreVal,
+    );
+    Get.to(() => const FrameShell());
+  }
+
+  void _startAnonymousSession() {
+    SessionController().initializeAnonymous();
+    Get.to(() => const FrameShell());
   }
 }
