@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'game_page.dart'; 
 import 'shot_input_page.dart';
 import '../controllers/session_controller.dart'; 
+import '../models/shot.dart';
 
 // Global access to the controller
 final SessionController _sessionController = SessionController();
@@ -542,11 +543,31 @@ class _BowlingShotState extends State<BowlingShot> {
 			? shotToDisplay.pinsState
 			: (widget.shotIndex == 1 ? List.filled(10, true) : activeGame.frames[widget.frameIndex].shots.last.pinsState);
 
+		final List<Shot> matchingPriorShots = [];
+		for (int frameIdx = 0; frameIdx < activeGame.frames.length; frameIdx++) {
+			final frame = activeGame.frames[frameIdx];
+			for (int shotIdx = 0; shotIdx < frame.shots.length; shotIdx++) {
+				final shotIndexInFrame = shotIdx + 1;
+				final isBeforeCurrentPosition =
+						frameIdx < widget.frameIndex ||
+						(frameIdx == widget.frameIndex && shotIndexInFrame < widget.shotIndex);
+
+				if (isBeforeCurrentPosition && shotIndexInFrame == widget.shotIndex) {
+					matchingPriorShots.add(frame.shots[shotIdx]);
+				}
+			}
+		}
+
+		final recentShots = matchingPriorShots.length <= 3
+				? matchingPriorShots
+				: matchingPriorShots.sublist(matchingPriorShots.length - 3);
+
 		final shotResult = await Navigator.push<Map<String, dynamic>>(
 			context,
 			MaterialPageRoute(
 				builder: (_) => ShotInputPage(
 					initialPins: initialPinsStanding,
+					recentShots: recentShots,
 					shotNumber: widget.globalShotNumber,
 					frameShotIndex: widget.shotIndex,
 					frameNumber: widget.frameIndex + 1,
@@ -710,7 +731,23 @@ class _BowlingShotState extends State<BowlingShot> {
 
 	Widget _buildInfoBar(int lane, double board, double speed, int ball) {
 		const double height = 38;
-		final boardDisplay = board % 1 == 0 ? board.toInt().toString() : board.toStringAsFixed(1);
+		const impactAbbreviations = <int, String>{
+			0: 'GUT',
+			11: 'R',
+			13: 'L',
+			16: 'LP',
+			17: 'P',
+			18: 'HP',
+			20: 'N',
+			21: 'H',
+			23: 'BR',
+			27: 'LF',
+		};
+		final roundedImpact = board.round();
+		final bool isWholeImpact = (board - roundedImpact).abs() < 0.001;
+		final boardDisplay = isWholeImpact
+			? (impactAbbreviations[roundedImpact] ?? roundedImpact.toString())
+			: board.toStringAsFixed(1);
 		return Container(
 			height: height,
 			padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

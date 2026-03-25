@@ -7,6 +7,7 @@ import '../models/shot.dart';
 
 class ShotInputPage extends StatefulWidget {
   final List<bool> initialPins;
+  final List<Shot> recentShots;
   final int shotNumber;
   final int frameShotIndex;
   final int frameNumber;
@@ -23,6 +24,7 @@ class ShotInputPage extends StatefulWidget {
   const ShotInputPage({
     super.key,
     required this.initialPins,
+    required this.recentShots,
     required this.shotNumber,
     required this.frameShotIndex,
     required this.frameNumber,
@@ -61,10 +63,8 @@ class _ShotInputPageState extends State<ShotInputPage> {
   int get _stance => 40 - _sliderPos.round();
   double _targetBoard = 20.0;
   double _breakpointBoard = 20.0;
-
-  // Demo data for recent results
-  final List<String> _recentBoards = ['Right', 'Light Pocket', 'Pocket'];
-  final List<int> _recentStances = [40, 25, 35];
+  late List<String> _recentBoards;
+  late List<String> _recentStances;
 
   final List<String> _titles = [
     'Recent Results',
@@ -94,6 +94,59 @@ class _ShotInputPageState extends State<ShotInputPage> {
     (index) => 10.0 + (index * 0.1),
   );
 
+  String _impactLabelFromValue(double boardValue) {
+    String titleCase(String value) {
+      return value
+          .split(' ')
+          .where((word) => word.isNotEmpty)
+          .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
+          .join(' ');
+    }
+
+    int nearestIndex = 0;
+    double nearestDelta = double.infinity;
+
+    for (int i = 0; i < _boardOptions.length; i++) {
+      final optionBoard = Shot.impactToBoard(_boardOptions[i]).toDouble();
+      final delta = (optionBoard - boardValue).abs();
+      if (delta < nearestDelta) {
+        nearestDelta = delta;
+        nearestIndex = i;
+      }
+    }
+
+    return titleCase(_boardOptions[nearestIndex]);
+  }
+
+  String _stanceLabelFromValue(double stanceValue) {
+    if (stanceValue % 1 == 0) {
+      return stanceValue.toInt().toString();
+    }
+    return stanceValue.toStringAsFixed(1);
+  }
+
+  List<String> _buildRecentImpactLabels() {
+    final labels = widget.recentShots
+        .take(3)
+        .map((shot) => _impactLabelFromValue(shot.impact))
+        .toList();
+    while (labels.length < 3) {
+      labels.add('');
+    }
+    return labels;
+  }
+
+  List<String> _buildRecentStanceLabels() {
+    final labels = widget.recentShots
+        .take(3)
+        .map((shot) => _stanceLabelFromValue(shot.stance))
+        .toList();
+    while (labels.length < 3) {
+      labels.add('');
+    }
+    return labels;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -117,6 +170,8 @@ class _ShotInputPageState extends State<ShotInputPage> {
     _selectedStance = widget.initialStance;
     _targetBoard = widget.initialTarget;
     _breakpointBoard = widget.initialBreakPoint;
+    _recentBoards = _buildRecentImpactLabels();
+    _recentStances = _buildRecentStanceLabels();
     _sliderPos = (40 - widget.initialStance).toDouble().clamp(1.0, 39.0);
     if (widget.initialIsFoul == true) {
       isFoul = true;
@@ -301,33 +356,39 @@ class _ShotInputPageState extends State<ShotInputPage> {
               ),
               actionsAlignment: MainAxisAlignment.center,
               actions: [
-                TextButton(
+                OutlinedButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  style: TextButton.styleFrom(
-                    minimumSize: Size.zero,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(60, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    side: const BorderSide(
+                      color: Colors.white60,
+                      width: 2,
+                    ),
                   ),
                   child: const Text(
                     'Cancel',
-                    style: TextStyle(fontSize: 12, color: Colors.white60),
+                    style: TextStyle(fontSize: 12, color: Colors.white60, fontWeight: FontWeight.w600),
                   ),
                 ),
-                TextButton(
+                OutlinedButton(
                   onPressed: () {
                     final selectedValue = intPart + decPart / 10.0;
                     final bounded = selectedValue.clamp(1.0, maxWholeBoard.toDouble());
                     onSelected(bounded.toDouble());
                     Navigator.of(context).pop();
                   },
-                  style: TextButton.styleFrom(
-                    minimumSize: Size.zero,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(60, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    side: const BorderSide(
+                      color: Color.fromRGBO(152, 124, 229, 1),
+                      width: 2,
+                    ),
                   ),
                   child: const Text(
                     'Apply',
-                    style: TextStyle(color: Color.fromRGBO(152, 124, 229, 1), fontSize: 12),
+                    style: TextStyle(color: Color.fromRGBO(152, 124, 229, 1), fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -791,7 +852,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   ? '${value.toInt()}'
                   : value.toStringAsFixed(1);
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(vertical: 1),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -834,10 +895,10 @@ Widget _buildStanceSlider({double scale = 1.0}) {
             }
 
             return Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 10, bottom: 4),
+                  padding: const EdgeInsets.only(top: 10, bottom: 8),
                   child: Text(
                     _titles[index],
                     style: const TextStyle(
@@ -855,6 +916,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                     maxWholeBoard: 50,
                   );
                 }),
+                const SizedBox(height: 4),
                 boardRow('Target', _targetBoard, () async {
                   await _showBoardPickerDialog(
                     'Target',
@@ -863,6 +925,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                     maxWholeBoard: 40,
                   );
                 }),
+                const SizedBox(height: 4),
                 boardRow('Breakpoint', _breakpointBoard, () async {
                   await _showBoardPickerDialog(
                     'Breakpoint',
@@ -871,16 +934,18 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                     maxWholeBoard: 40,
                   );
                 }),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Horizontal divider line
-                    Container(
-                      width: MediaQuery.of(context).size.width * 0.7,
-                      height: 1,
-                      color: Colors.grey[600],
-                    ),
-                    const SizedBox(height: 6),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Horizontal divider line
+                      Container(
+                        width: MediaQuery.of(context).size.width * 0.7,
+                        height: 1,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(height: 6),
                     // Lane dropdown (horizontal layout)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -933,7 +998,8 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       ],
                     ),
                     const SizedBox(height: 8),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             );
@@ -1032,13 +1098,17 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 ),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 15),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
                       minimumSize: const Size(80, 30),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      side: const BorderSide(
+                        color: Color.fromRGBO(152, 124, 229, 1),
+                        width: 2,
+                      ),
                     ),
                     onPressed: _submit,
-                    child: const Text('Submit', style: TextStyle(fontSize: 12)),
+                    child: const Text('Submit', style: TextStyle(fontSize: 12, color: Color.fromRGBO(152, 124, 229, 1), fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -1133,7 +1203,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                           ..._recentStances.map((stance) => Padding(
                             padding: const EdgeInsets.symmetric(vertical: 1),
                             child: Text(
-                              stance.toString(),
+                              stance,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
@@ -1294,7 +1364,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       child: Text(
                         value.toString(),
                         style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black.withOpacity(0.80),
+                          color: isSelected ? Colors.white : Colors.white.withOpacity(0.45),
                           fontSize: isSelected ? 28 : 20,
                           fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
                         ),
@@ -1406,7 +1476,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       child: Text(
                         value.toString(),
                         style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black.withOpacity(0.80),
+                          color: isSelected ? Colors.white : Colors.white.withOpacity(0.45),
                           fontSize: isSelected ? 28 : 20,
                           fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
                         ),
@@ -1513,8 +1583,8 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                         child: Text(
                           labelFormatter(itemIndex),
                           style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.black.withOpacity(0.80),
-                            fontSize: isSelected ? 18 : 14,
+                            color: isSelected ? Colors.white : Colors.white.withOpacity(0.45),
+                            fontSize: isSelected ? 22 : 17,
                             fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
                           ),
                         ),
