@@ -12,6 +12,11 @@ class AccountPacket {
   final int? shotNumber;
   final int primaryHand; // 0=Left, 1=Right
 
+  // Game data
+  final int? gameCount;
+  final int? previousPins; // 11-bit bitmask (10 pins + foul bit)
+  final int? gameScore;
+
   // Ball data
   final List<Ball> balls;
 
@@ -30,6 +35,9 @@ class AccountPacket {
     this.gameNumber,
     this.shotNumber,
     required this.primaryHand,
+    this.gameCount,
+    this.previousPins,
+    this.gameScore,
     required this.balls,
     required this.username,
     required this.userId,
@@ -69,9 +77,9 @@ class AccountPacket {
       throw ArgumentError('Incomplete packet: ${data.length} bytes received, but header declares $packetLength bytes');
     }
 
-    // Session ID: 4 bytes (uint32, big-endian)
+    // Session ID: 4 bytes (uint32, little-endian)
     if (idx + 4 > data.length) throw ArgumentError('Packet too short for session ID');
-    final sessionId = (data[idx] << 24) | (data[idx + 1] << 16) | (data[idx + 2] << 8) | data[idx + 3];
+    final sessionId = data[idx] | (data[idx + 1] << 8) | (data[idx + 2] << 16) | (data[idx + 3] << 24);
     idx += 4;
 
     // Event Name: null-terminated ASCII string
@@ -87,20 +95,35 @@ class AccountPacket {
     if (idx >= data.length) throw ArgumentError('Packet too short for primary hand');
     final primaryHand = data[idx++];
 
-    // Frame Number: 4 bytes (uint32, big-endian) - 0 if no active games
+    // Frame Number: 4 bytes (uint32, little-endian) - 0 if no active games
     if (idx + 4 > data.length) throw ArgumentError('Packet too short for frame number');
-    final frameNumber = (data[idx] << 24) | (data[idx + 1] << 16) | (data[idx + 2] << 8) | data[idx + 3];
+    final frameNumber = data[idx] | (data[idx + 1] << 8) | (data[idx + 2] << 16) | (data[idx + 3] << 24);
     idx += 4;
 
-    // Game Number: 2 bytes (uint16, big-endian) - 0 if no active games
+    // Game Number: 2 bytes (uint16, little-endian) - 0 if no active games
     if (idx + 2 > data.length) throw ArgumentError('Packet too short for game number');
-    final gameNumber = (data[idx] << 8) | data[idx + 1];
+    final gameNumber = data[idx] | (data[idx + 1] << 8);
     idx += 2;
 
-    // Shot Number: 2 bytes (uint16, big-endian) - 0 if no active games
+    // Shot Number: 2 bytes (uint16, little-endian) - 0 if no active games
     if (idx + 2 > data.length) throw ArgumentError('Packet too short for shot number');
-    final shotNumber = (data[idx] << 8) | data[idx + 1];
+    final shotNumber = data[idx] | (data[idx + 1] << 8);
     idx += 2;
+
+    // Game Count: 2 bytes (uint16, little-endian)
+    if (idx + 2 > data.length) throw ArgumentError('Packet too short for game count');
+    final gameCount = data[idx] | (data[idx + 1] << 8);
+    idx += 2;
+
+    // Previous Pins: 2 bytes (uint16, little-endian) - 11-bit pin bitmask + foul bit
+    if (idx + 2 > data.length) throw ArgumentError('Packet too short for previous pins');
+    final previousPins = data[idx] | (data[idx + 1] << 8);
+    idx += 2;
+
+    // Game Score: 4 bytes (int32, little-endian)
+    if (idx + 4 > data.length) throw ArgumentError('Packet too short for game score');
+    final gameScore = data[idx] | (data[idx + 1] << 8) | (data[idx + 2] << 16) | (data[idx + 3] << 24);
+    idx += 4;
 
     // Ball Count: 1 byte
     if (idx >= data.length) throw ArgumentError('Packet too short for ball count');
@@ -109,9 +132,9 @@ class AccountPacket {
     // Parse balls
     final balls = <Ball>[];
     for (int i = 0; i < ballCount; i++) {
-      // Ball ID: 4 bytes (uint32, big-endian)
+      // Ball ID: 4 bytes (uint32, little-endian)
       if (idx + 4 > data.length) throw ArgumentError('Packet too short for ball $i ID');
-      final ballId = (data[idx] << 24) | (data[idx + 1] << 16) | (data[idx + 2] << 8) | data[idx + 3];
+      final ballId = data[idx] | (data[idx + 1] << 8) | (data[idx + 2] << 16) | (data[idx + 3] << 24);
       idx += 4;
 
       // Ball Name: null-terminated ASCII string
@@ -136,9 +159,9 @@ class AccountPacket {
     idx++; // Skip null terminator
     final username = String.fromCharCodes(usernameBytes);
 
-    // User ID: 4 bytes (uint32, big-endian)
+    // User ID: 4 bytes (uint32, little-endian)
     if (idx + 4 > data.length) throw ArgumentError('Packet too short for user ID');
-    final userId = (data[idx] << 24) | (data[idx + 1] << 16) | (data[idx + 2] << 8) | data[idx + 3];
+    final userId = data[idx] | (data[idx + 1] << 8) | (data[idx + 2] << 16) | (data[idx + 3] << 24);
 
     return AccountPacket(
       packetType: packetType,
@@ -151,6 +174,9 @@ class AccountPacket {
       gameNumber: gameNumber,
       shotNumber: shotNumber,
       primaryHand: primaryHand,
+      gameCount: gameCount,
+      previousPins: previousPins,
+      gameScore: gameScore,
       balls: balls,
       username: username,
       userId: userId,
@@ -167,6 +193,9 @@ class AccountPacket {
     gameNumber: $gameNumber,
     shotNumber: $shotNumber,
     primaryHand: ${primaryHand == 0 ? 'Left' : 'Right'},
+    gameCount: $gameCount,
+    previousPins: 0x${previousPins?.toRadixString(16) ?? 'null'},
+    gameScore: $gameScore,
     username: $username,
     userId: $userId,
     balls: ${balls.map((b) => '${b.name}(id=${b.id})').join(', ')}

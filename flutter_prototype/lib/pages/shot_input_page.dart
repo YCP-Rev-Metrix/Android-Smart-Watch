@@ -95,8 +95,8 @@ class _ShotInputPageState extends State<ShotInputPage> {
   @override
   void initState() {
     super.initState();
-    // Start with no pins selected (all knocked down by default)
-    // User will select the pins they LEFT STANDING
+    // Initialize pins to all false (all knocked down by default, user selects which to leave standing)
+    // _selectedPins always represents which pins are LEFT STANDING (true = standing)
     _selectedPins = List.filled(10, false);
     _speedScrollController = ScrollController();
     _speedScrollController.addListener(_onSpeedScroll);
@@ -232,10 +232,10 @@ class _ShotInputPageState extends State<ShotInputPage> {
        ? const Color.fromRGBO(152, 124, 229, 1) // purple - selected as standing
        : const Color.fromRGBO(119, 136, 153, 1); // light slate grey - will be knocked down
    } else {
-     // Shot 2
+     // Shot 2: inverted colors - knocked down pins are purple, standing pins are red
      pinColor = isSelected 
-       ? const Color.fromARGB(255, 255, 0, 0) // red - selected as standing after shot 2
-       : const Color.fromRGBO(142, 124, 195, 1); // purple - available from shot 1
+       ? const Color.fromARGB(255, 255, 0, 0) // red - left standing on shot 2
+       : const Color.fromRGBO(152, 124, 229, 1); // purple - knocked down on shot 2
    }
 
    return GestureDetector(
@@ -462,7 +462,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     });
   }
 
-  int _calculatePinsDown() {
+   int _calculatePinsDown() {
     final initialStanding = widget.initialPins.where((p) => p).length;
     final currentStanding = _selectedPins.where((p) => p).length;
     return initialStanding - currentStanding;
@@ -491,20 +491,8 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     // Add the shot to the FCFS packet queue
     PacketQueue.instance.enqueue(shot);
 
-    // Send the shot packet over BLE immediately
-    final sc = SessionController();
-    final bleBytes = shot.encodeToBinary(
-      sessionId: sc.activeSessionId,
-      gameNumber: sc.activeGameIndex + 1,
-      shotIndexInFrame: widget.frameShotIndex,
-    );
-    try {
-      Get.find<BLEManager>().sendRawBLEPacket(bleBytes);
-    } catch (e) {
-      // BLEManager not available (non-Android or not connected) — log and continue
-      // ignore: avoid_print
-      print('BLE send failed: $e');
-    }
+    // Note: Shot packet is sent from session_controller.dart after the shot is recorded
+    // with the updated game score (via _sendShotPacket)
 
     Navigator.of(context).pop({
       'pinsStanding': _selectedPins,
@@ -512,7 +500,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
       'outcome': _selectedOutcome,
       'isFoul': isFoul,
       'stance': _stance,
-      'board': _selectedBoard, // Direct index (0-8)
+      'board': _selectedBoard,
       'lane': _selectedLane,
       'ball': _selectedBall,
       'speed': _selectedSpeed,

@@ -99,12 +99,29 @@ class _SessionsPageState extends State<SessionsPage> {
     final gameNum = (packet.gameNumber == null || packet.gameNumber == 0) ? 1 : packet.gameNumber!;
     final frameNum = (packet.frameNumber == null || packet.frameNumber == 0) ? 1 : packet.frameNumber!;
     final shotNum = (packet.shotNumber == null || packet.shotNumber == 0) ? 1 : packet.shotNumber!;
+    final gameCountVal = (packet.gameCount == null || packet.gameCount == 0) ? 1 : packet.gameCount!;
+    final gameScoreVal = packet.gameScore ?? 0;
+    
+    // Convert previousPins bitmask to List<bool> (true = standing, false = knocked down)
+    List<bool>? previousPinsStanding;
+    if (packet.previousPins != null && shotNum >= 2) {
+      previousPinsStanding = List.filled(10, false);
+      for (int i = 0; i < 10; i++) {
+        if ((packet.previousPins! & (1 << i)) != 0) {
+          previousPinsStanding[i] = true; // Pin is standing
+        }
+      }
+    }
+    
     SessionController().initializeFromPacket(
       sessionId: packet.sessionId,
       gameNumber: gameNum,
       frameNumber: frameNum,
       shotNumber: shotNum,
       balls: packet.balls,
+      previousPinsStanding: previousPinsStanding,
+      gameCount: gameCountVal,
+      gameScore: gameScoreVal,
     );
     Get.to(() => const FrameShell());
   }

@@ -9,6 +9,7 @@ class Shot {
   final double speed;
   final int frameNum;
   final int lane;
+  final bool isReadOnly; // True if this shot cannot be edited
 
   static const int foulBit = 1 << 10;
 
@@ -22,7 +23,28 @@ class Shot {
     required this.speed,
     required this.frameNum,
     required this.lane,
+    this.isReadOnly = false,
   });
+
+  /// Factory to create a read-only default shot with previous pins displayed
+  factory Shot.readOnlyDefault({
+    required int frameNum,
+    required int lane,
+    required List<bool> standingPins,
+  }) {
+    return Shot(
+      shotNumber: 0,  // 0-based: first shot in frame
+      ball: 3,
+      numOfPinsKnocked: 10 - standingPins.fold(0, (sum, standing) => sum + (standing ? 1 : 0)),
+      pins: buildPins(standingPins: standingPins, isFoul: false),
+      board: 12,
+      stance: 20,
+      speed: 15.5,
+      frameNum: frameNum,
+      lane: lane,
+      isReadOnly: true,
+    );
+  }
 
   /// Calculates the number of pins standing (10 - numOfPinsKnocked).
   int get pinsStanding => 10 - numOfPinsKnocked;
@@ -69,6 +91,7 @@ class Shot {
     'speed': speed,
     'frameNum': frameNum,
     'lane': lane,
+    'isReadOnly': isReadOnly,
   };
 
   static Shot fromJson(Map<String, dynamic> json) => Shot(
@@ -81,6 +104,7 @@ class Shot {
     speed: (json['speed'] ?? 0.0).toDouble(),
     frameNum: json['frameNum'] ?? 0,
     lane: json['lane'] ?? 1,
+    isReadOnly: json['isReadOnly'] ?? false,
   );
 
   /// Encodes shot into 23-byte binary packet for BLE transmission.
@@ -102,6 +126,7 @@ class Shot {
   List<int> encodeToBinary({
     required int sessionId,
     required int gameNumber,
+    required int gameScore,
     int packetType = 0x03,
     int version1 = 1,
     int? version2,
@@ -109,7 +134,7 @@ class Shot {
     int? breakPoint,
     int shotIndexInFrame = 1,
   }) {
-    const int packetSize = 23; // 19 byte payload + 4 byte padding
+    const int packetSize = 23; // 22 byte payload + 1 byte padding
     final buffer = List<int>.filled(packetSize, 0);
 
     int idx = 0;
@@ -156,7 +181,6 @@ class Shot {
     buffer[idx++] = (pins >> 8) & 0xFF;
     buffer[idx++] = pins & 0xFF;
 
-
     // Byte 12: Stance (0-100, stored as x2 for 0.5 values)
     buffer[idx++] = (stance * 2) & 0xFF;
 
@@ -178,12 +202,18 @@ class Shot {
     // Byte 18: Lane # (0-160)
     buffer[idx++] = lane & 0xFF;
 
-    // Bytes 19-22: Padding (already filled with 0s)
+    // Bytes 19-21: Game Score (3 bytes, little-endian, unsigned 24-bit integer)
+    final score = gameScore & 0xFFFFFF;
+    buffer[idx++] = score & 0xFF;
+    buffer[idx++] = (score >> 8) & 0xFF;
+    buffer[idx++] = (score >> 16) & 0xFF;
+
+    // Byte 22: Padding (already filled with 0)
 
     return buffer;
   }
 
-  /// Decodes a 23-byte binary packet back to Shot object and session context.
+  /// Decodes a binary packet back to Shot object and session context.
   /// Returns a map with decoded shot and context data.
   static Map<String, dynamic> decodeFromBinary(List<int> data) {
     if (data.length < 23) {
