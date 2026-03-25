@@ -74,7 +74,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
   final List<String> _titles = [
     'Recent Results',
     'Select Ball',
-    'Stance',
+    'Boards',
     'Record',
     'Shot',
     'Impact',
@@ -912,7 +912,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 10, bottom: 8),
+                  padding: const EdgeInsets.only(top: 10, bottom: 16),
                   child: Text(
                     _titles[index],
                     style: const TextStyle(
@@ -959,7 +959,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                         height: 1,
                         color: Colors.grey[600],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 12),
                     // Lane dropdown (horizontal layout)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1132,7 +1132,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
             return Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 30, bottom: 10),
+                  padding: const EdgeInsets.only(top: 12, bottom: 5),
                   child: Text(
                     _titles[index],
                     style: const TextStyle(
@@ -1146,16 +1146,8 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildRecordButton(scale: 2.2, round: true),
+                      _buildRecordButton(scale: 3.5, round: true),
                       const SizedBox(height: 20),
-                      Text(
-                        _isRecording ? 'Recording...' : 'Press to Record',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
                     ],
                   ),
                 ),
