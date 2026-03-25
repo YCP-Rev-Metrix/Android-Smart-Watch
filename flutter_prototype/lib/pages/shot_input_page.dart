@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
+import 'package:get/get.dart';
 import '../controllers/ble_manager.dart';
 import '../controllers/packet_queue.dart';
+import '../controllers/session_controller.dart';
 import '../models/shot.dart';
+import '../models/account_packet.dart';
 
 class ShotInputPage extends StatefulWidget {
   final List<bool> initialPins;
@@ -17,6 +20,7 @@ class ShotInputPage extends StatefulWidget {
   final int initialStance;
   final bool startInPost;
   final bool? initialIsFoul;
+  final List<Ball>? balls;
 
   const ShotInputPage({
     super.key,
@@ -31,6 +35,7 @@ class ShotInputPage extends StatefulWidget {
     required this.initialStance,
     required this.startInPost,
     this.initialIsFoul,
+    this.balls,
   });
 
   @override
@@ -90,8 +95,8 @@ class _ShotInputPageState extends State<ShotInputPage> {
   @override
   void initState() {
     super.initState();
-    // Start with no pins selected (all knocked down by default)
-    // User will select the pins they LEFT STANDING
+    // Initialize pins to all false (all knocked down by default, user selects which to leave standing)
+    // _selectedPins always represents which pins are LEFT STANDING (true = standing)
     _selectedPins = List.filled(10, false);
     _speedScrollController = ScrollController();
     _speedScrollController.addListener(_onSpeedScroll);
@@ -227,10 +232,10 @@ class _ShotInputPageState extends State<ShotInputPage> {
        ? const Color.fromRGBO(152, 124, 229, 1) // purple - selected as standing
        : const Color.fromRGBO(119, 136, 153, 1); // light slate grey - will be knocked down
    } else {
-     // Shot 2
+     // Shot 2: inverted colors - knocked down pins are purple, standing pins are red
      pinColor = isSelected 
-       ? const Color.fromARGB(255, 255, 0, 0) // red - selected as standing after shot 2
-       : const Color.fromRGBO(142, 124, 195, 1); // purple - available from shot 1
+       ? const Color.fromARGB(255, 255, 0, 0) // red - left standing on shot 2
+       : const Color.fromRGBO(152, 124, 229, 1); // purple - knocked down on shot 2
    }
 
    return GestureDetector(
@@ -323,7 +328,7 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
     } else {
       // Start recording
       setState(() => _isRecording = true);
-      await BLEManager().sendRecordingCommand("startRec");
+      await Get.find<BLEManager>().sendRecordingCommand("startRec");
       // Auto-stop after 30 seconds
       _recordingTimer = Timer(const Duration(seconds: 30), () {
         _stopRecording();
@@ -444,7 +449,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     if (_isRecording) {
       _recordingTimer?.cancel();
       _recordingTimer = null;
-      await BLEManager().sendRecordingCommand("stopRec");
+      await Get.find<BLEManager>().sendRecordingCommand("stopRec");
       setState(() => _isRecording = false);
     }
   }
@@ -457,7 +462,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     });
   }
 
-  int _calculatePinsDown() {
+   int _calculatePinsDown() {
     final initialStanding = widget.initialPins.where((p) => p).length;
     final currentStanding = _selectedPins.where((p) => p).length;
     return initialStanding - currentStanding;
@@ -486,13 +491,16 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     // Add the shot to the FCFS packet queue
     PacketQueue.instance.enqueue(shot);
 
+    // Note: Shot packet is sent from session_controller.dart after the shot is recorded
+    // with the updated game score (via _sendShotPacket)
+
     Navigator.of(context).pop({
       'pinsStanding': _selectedPins,
       'pinsDownCount': pinsDownCount,
       'outcome': _selectedOutcome,
       'isFoul': isFoul,
       'stance': _stance,
-      'board': _selectedBoard, // Direct index (0-8)
+      'board': _selectedBoard,
       'lane': _selectedLane,
       'ball': _selectedBall,
       'speed': _selectedSpeed,
@@ -510,6 +518,12 @@ Widget _buildStanceSlider({double scale = 1.0}) {
         itemBuilder: (context, index) {
           if (index == 1) {
             // Ball selector page
+            final effectiveBalls = (widget.balls != null && widget.balls!.isNotEmpty)
+                ? widget.balls!
+                : List.generate(4, (i) => Ball(id: i + 1, name: 'Ball ${i + 1}'));
+            final selectedIndex = effectiveBalls.indexWhere((b) => b.id == _selectedBall);
+            final safeSelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+
             return Column(
               children: [
                 Padding(
@@ -531,12 +545,12 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       children: [
                         Expanded(
                           child: _buildVerticalListPicker(
-                            items: List.generate(4, (i) => 'Ball ${i + 1}'),
-                            selectedIndex: _selectedBall - 1,
+                            items: effectiveBalls.map((b) => b.name).toList(),
+                            selectedIndex: safeSelectedIndex,
                             onSelectionChanged: (index) {
-                              setState(() => _selectedBall = index + 1);
+                              setState(() => _selectedBall = effectiveBalls[index].id);
                             },
-                            labelFormatter: (index) => 'Ball ${index + 1}',
+                            labelFormatter: (index) => effectiveBalls[index].name,
                           ),
                         ),
                       ],

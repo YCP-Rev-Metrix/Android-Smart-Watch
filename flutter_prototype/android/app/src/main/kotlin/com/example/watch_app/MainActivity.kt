@@ -59,7 +59,23 @@ class MainActivity: FlutterActivity() {
                     "sendNotification" -> {
                         val service = call.argument<String>("serviceUuid") ?: ""
                         val char = call.argument<String>("charUuid") ?: ""
-                        val bytes = call.argument<ByteArray>("bytes") ?: ByteArray(0)
+                        
+                        // Handle ArrayList<Integer> from Flutter (serialized List<int>)
+                        val bytes: ByteArray = try {
+                            val rawBytes = call.argument<Any>("bytes")
+                            when (rawBytes) {
+                                is ByteArray -> rawBytes
+                                is ArrayList<*> -> {
+                                    @Suppress("UNCHECKED_CAST")
+                                    val intList = rawBytes as ArrayList<Int>
+                                    intList.map { it.toByte() }.toByteArray()
+                                }
+                                else -> ByteArray(0)
+                            }
+                        } catch (e: Exception) {
+                            ByteArray(0)
+                        }
+                        
                         bleGattManager.sendNotification(service, char, bytes)
                         result.success(null)
                     }
