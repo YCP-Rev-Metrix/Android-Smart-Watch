@@ -3,17 +3,11 @@ import 'dart:async';
 import 'dart:collection';
 import '../models/shot.dart';
 
-/// A singleton FCFS (First-Come, First-Served) queue for [Shot] packets.
-///
-/// The 10-second processing loop starts automatically when the first shot is
-/// enqueued and stops on its own once the queue becomes empty.
 class PacketQueue {
   PacketQueue._internal();
 
   static final PacketQueue instance = PacketQueue._internal();
 
-  /// Internal FCFS queue – [Queue] preserves insertion order and supports
-  /// O(1) access to both ends.
   final Queue<Shot> _queue = Queue<Shot>();
 
   Timer? _processingTimer;
@@ -27,7 +21,7 @@ class PacketQueue {
         print('[PacketQueue] Next shot in queue: ${_queue.first.toJson()}\n'
             '[PacketQueue] Queue length: ${_queue.length}');
       } else {
-        // Queue drained – stop the timer until another shot arrives.
+        // Queue empty, stop the timer until another shot arrives.
         _processingTimer?.cancel();
         _processingTimer = null;
         // ignore: avoid_print

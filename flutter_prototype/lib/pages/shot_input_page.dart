@@ -10,14 +10,17 @@ import '../models/account_packet.dart';
 
 class ShotInputPage extends StatefulWidget {
   final List<bool> initialPins;
+  final List<Shot> recentShots;
   final int shotNumber;
   final int frameShotIndex;
   final int frameNumber;
   final int initialLane;
-  final int initialBoard;
+  final double initialImpact;
   final int initialBall;
   final double initialSpeed;
-  final int initialStance;
+  final double initialStance;
+  final double initialTarget;
+  final double initialBreakPoint;
   final bool startInPost;
   final bool? initialIsFoul;
   final List<Ball>? balls;
@@ -25,14 +28,17 @@ class ShotInputPage extends StatefulWidget {
   const ShotInputPage({
     super.key,
     required this.initialPins,
+    required this.recentShots,
     required this.shotNumber,
     required this.frameShotIndex,
     required this.frameNumber,
     required this.initialLane,
-    required this.initialBoard,
+    required this.initialImpact,
     required this.initialBall,
     required this.initialSpeed,
     required this.initialStance,
+    required this.initialTarget,
+    required this.initialBreakPoint,
     required this.startInPost,
     this.initialIsFoul,
     this.balls,
@@ -47,7 +53,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
   late ScrollController _speedScrollController;
   int _currentPage = 0;
   int _selectedBall = 1;
-  int _selectedBoard = 0;
+  int _selectedBoard = 5;
   bool isFoul = false;
   double _selectedSpeed = 15;
   int _selectedSpeedInt = 15; // Integer part of speed (5-40)
@@ -60,37 +66,91 @@ class _ShotInputPageState extends State<ShotInputPage> {
   int _selectedLane = 1;
   double _sliderPos = 20;
   int get _stance => 40 - _sliderPos.round();
-
-  // Demo data for recent results
-  final List<String> _recentBoards = ['Right', 'Light Pocket', 'Pocket'];
-  final List<int> _recentStances = [40, 25, 35];
+  double _targetBoard = 20.0;
+  double _breakpointBoard = 20.0;
+  late List<String> _recentBoards;
+  late List<String> _recentStances;
 
   final List<String> _titles = [
     'Recent Results',
     'Select Ball',
-    'Stance',
+    'Boards',
     'Record',
     'Shot',
-    'Board',
+    'Impact',
     'Speed',
   ];
 
   final List<String> _boardOptions = [
-    'Right',
-    'Light',
-    'Light pocket',
-    'Pocket',
-    'High pocket',
-    'High',
-    'Nose',
-    'Brooklyn',
+    'Gutter',
     'Left',
+    'Brooklyn',
+    'Nose',
+    'High',
+    'High pocket',
+    'Pocket',
+    'Light pocket',
+    'Light',
+    'Right',
   ];
 
   final List<double> _speedOptions = List.generate(
     101,
     (index) => 10.0 + (index * 0.1),
   );
+
+  String _impactLabelFromValue(double boardValue) {
+    String titleCase(String value) {
+      return value
+          .split(' ')
+          .where((word) => word.isNotEmpty)
+          .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
+          .join(' ');
+    }
+
+    int nearestIndex = 0;
+    double nearestDelta = double.infinity;
+
+    for (int i = 0; i < _boardOptions.length; i++) {
+      final optionBoard = Shot.impactToBoard(_boardOptions[i]).toDouble();
+      final delta = (optionBoard - boardValue).abs();
+      if (delta < nearestDelta) {
+        nearestDelta = delta;
+        nearestIndex = i;
+      }
+    }
+
+    return titleCase(_boardOptions[nearestIndex]);
+  }
+
+  String _stanceLabelFromValue(double stanceValue) {
+    if (stanceValue % 1 == 0) {
+      return stanceValue.toInt().toString();
+    }
+    return stanceValue.toStringAsFixed(1);
+  }
+
+  List<String> _buildRecentImpactLabels() {
+    final labels = widget.recentShots
+        .take(3)
+        .map((shot) => _impactLabelFromValue(shot.impact))
+        .toList();
+    while (labels.length < 3) {
+      labels.add('');
+    }
+    return labels;
+  }
+
+  List<String> _buildRecentStanceLabels() {
+    final labels = widget.recentShots
+        .take(3)
+        .map((shot) => _stanceLabelFromValue(shot.stance))
+        .toList();
+    while (labels.length < 3) {
+      labels.add('');
+    }
+    return labels;
+  }
 
   @override
   void initState() {
@@ -103,11 +163,20 @@ class _ShotInputPageState extends State<ShotInputPage> {
     
     // Initialize from widget parameters
     _selectedBall = widget.initialBall;
-    _selectedBoard = widget.initialBoard;
+    if (widget.startInPost) {
+      _selectedBoard = _resolveInitialImpactIndex(widget.initialImpact);
+    } else {
+      _selectedBoard = _boardOptions.indexOf('Pocket');
+    }
     _selectedLane = widget.initialLane;
     _selectedSpeed = widget.initialSpeed;
     _selectedSpeedInt = widget.initialSpeed.truncate();
     _selectedSpeedDecimal = ((widget.initialSpeed - widget.initialSpeed.truncate()) * 10).round();
+    _selectedStance = widget.initialStance;
+    _targetBoard = widget.initialTarget;
+    _breakpointBoard = widget.initialBreakPoint;
+    _recentBoards = _buildRecentImpactLabels();
+    _recentStances = _buildRecentStanceLabels();
     _sliderPos = (40 - widget.initialStance).toDouble().clamp(1.0, 39.0);
     if (widget.initialIsFoul == true) {
       isFoul = true;
@@ -121,6 +190,218 @@ class _ShotInputPageState extends State<ShotInputPage> {
         _speedScrollController.jumpTo(screenCenterOffset);
       }
     });
+  }
+
+  Future<void> _showBoardPickerDialog(
+    String label,
+    double currentValue,
+    ValueChanged<double> onSelected,
+    {int maxWholeBoard = 40}
+  ) async {
+    int intPart = currentValue.truncate();
+    int decPart = ((currentValue - intPart) * 10).round(); // 0 or 5
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            const double itemHeight = 40;
+            const double wheelHeight = 160;
+
+            Widget buildWheel({
+              required List<int> values,
+              required int selected,
+              required ValueChanged<int> onTap,
+              required Alignment alignment,
+              required EdgeInsets textPadding,
+            }) {
+              final controller = ScrollController();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final idx = values.indexOf(selected);
+                if (controller.hasClients && idx >= 0) {
+                  controller.jumpTo(
+                    (idx * itemHeight).clamp(
+                      0.0,
+                      ((values.length - 1) * itemHeight).toDouble(),
+                    ),
+                  );
+                }
+              });
+
+              return SizedBox(
+                height: wheelHeight,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: ShaderMask(
+                    shaderCallback: (rect) => const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.white,
+                        Colors.white,
+                        Colors.transparent,
+                      ],
+                      stops: [0.0, 0.15, 0.92, 1.0],
+                    ).createShader(rect),
+                    blendMode: BlendMode.dstIn,
+                    child: ListView.builder(
+                      controller: controller,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: values.length + 2,
+                      itemBuilder: (ctx, i) {
+                        if (i == 0) return const SizedBox(height: itemHeight);
+                        if (i == values.length + 1) {
+                          return const SizedBox(height: wheelHeight - itemHeight);
+                        }
+                        final idx2 = i - 1;
+                        final value = values[idx2];
+                        final isSel = value == selected;
+                        return GestureDetector(
+                          onTap: () {
+                            setDialogState(() => onTap(value));
+                            final targetOffset = (idx2 * itemHeight).clamp(
+                              0.0,
+                              ((values.length - 1) * itemHeight).toDouble(),
+                            );
+                            controller.animateTo(
+                              targetOffset,
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOut,
+                            );
+                          },
+                          child: Container(
+                            height: itemHeight,
+                            alignment: alignment,
+                            padding: textPadding,
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: Colors.black.withOpacity(0.2),
+                                  width: 0.8,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              '$value',
+                              style: TextStyle(
+                                color: isSel
+                                    ? Colors.white
+                                    : Colors.white.withOpacity(0.45),
+                                fontSize: isSel ? 28 : 20,
+                                fontWeight: isSel
+                                    ? FontWeight.w700
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            final intValues =
+              List<int>.generate(maxWholeBoard, (i) => maxWholeBoard - i); // max..1
+            final decValues = [5, 0]; // 0.5 then 0.0
+
+            return AlertDialog(
+              backgroundColor: const Color.fromRGBO(80, 80, 80, 1),
+              titlePadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              actionsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              title: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SizedBox(
+                width: 200,
+                height: wheelHeight + 20,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: buildWheel(
+                        values: intValues,
+                        selected: intPart,
+                        onTap: (v) => intPart = v,
+                        alignment: Alignment.centerRight,
+                        textPadding: const EdgeInsets.only(right: 4),
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4, right: 4, top: 18),
+                      child: Text(
+                        '.',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: buildWheel(
+                        values: decValues,
+                        selected: decPart,
+                        onTap: (v) => decPart = v,
+                        alignment: Alignment.centerLeft,
+                        textPadding: const EdgeInsets.only(left: 4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actions: [
+                OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(60, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    side: const BorderSide(
+                      color: Colors.white60,
+                      width: 2,
+                    ),
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontSize: 12, color: Colors.white60, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                OutlinedButton(
+                  onPressed: () {
+                    final selectedValue = intPart + decPart / 10.0;
+                    final bounded = selectedValue.clamp(1.0, maxWholeBoard.toDouble());
+                    onSelected(bounded.toDouble());
+                    Navigator.of(context).pop();
+                  },
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(60, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    side: const BorderSide(
+                      color: Color.fromRGBO(152, 124, 229, 1),
+                      width: 2,
+                    ),
+                  ),
+                  child: const Text(
+                    'Apply',
+                    style: TextStyle(color: Color.fromRGBO(152, 124, 229, 1), fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _togglePin(int index) {
@@ -303,6 +584,7 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
            // Gutter: no pins were knocked down; clear outcome selection
            _selectedOutcome = null;
            isFoul = false;
+           _selectedBoard = _boardOptions.indexOf('Gutter');
          }
        });
      },
@@ -468,8 +750,21 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     return initialStanding - currentStanding;
   }
 
+  int _resolveInitialImpactIndex(double boardValue) {
+    final mappedIdx = _boardOptions.indexWhere(
+      (impact) => Shot.impactToBoard(impact).toDouble() == boardValue,
+    );
+    if (mappedIdx != -1) {
+      return mappedIdx;
+    }
+
+    return _boardOptions.indexOf('Pocket');
+  }
+
   void _submit() {
     final pinsDownCount = _calculatePinsDown();
+    final selectedImpact = _boardOptions[_selectedBoard];
+    final impactBoard = Shot.impactToBoard(selectedImpact).toDouble();
 
     // Build the Shot model from all collected input data
     final shot = Shot(
@@ -477,8 +772,10 @@ Widget _buildStanceSlider({double scale = 1.0}) {
       ball: _selectedBall,
       numOfPinsKnocked: pinsDownCount,
       pins: Shot.buildPins(standingPins: _selectedPins, isFoul: isFoul),
-      board: _selectedBoard,
-      stance: _stance,
+      impact: impactBoard,
+      stance: _selectedStance,
+      target: _targetBoard,
+      breakPoint: _breakpointBoard,
       speed: _selectedSpeed,
       frameNum: widget.frameNumber,
       lane: _selectedLane,
@@ -499,8 +796,11 @@ Widget _buildStanceSlider({double scale = 1.0}) {
       'pinsDownCount': pinsDownCount,
       'outcome': _selectedOutcome,
       'isFoul': isFoul,
-      'stance': _stance,
-      'board': _selectedBoard,
+      'stance': _selectedStance,
+      'target': _targetBoard,
+      'breakPoint': _breakpointBoard,
+      'impact': impactBoard,
+      'board': impactBoard,
       'lane': _selectedLane,
       'ball': _selectedBall,
       'speed': _selectedSpeed,
@@ -560,150 +860,161 @@ Widget _buildStanceSlider({double scale = 1.0}) {
               ],
             );
           } else if (index == 2) {
-            // Stance page with slider and lane dropdown
+            // Stance page with stance/target/breakpoint and lane
+            Widget boardRow(String label, double value, VoidCallback onTap) {
+              final displayVal = value % 1 == 0
+                  ? '${value.toInt()}'
+                  : value.toStringAsFixed(1);
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 1),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 90,
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: onTap,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color.fromRGBO(70, 70, 70, 1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                              color: Colors.grey[600]!, width: 1),
+                        ),
+                        child: Text(
+                          displayVal,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
             return Column(
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 30, bottom: 4),
+                  padding: const EdgeInsets.only(top: 10, bottom: 16),
                   child: Text(
                     _titles[index],
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-                // Stance value with grey box and +/- buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          if (_sliderPos > 1) {
-                            _sliderPos = math.max(1.0, _sliderPos - 1);
-                          }
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color.fromRGBO(60, 60, 60, 1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          '+',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color.fromRGBO(90, 90, 90, 1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '$_stance',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          if (_sliderPos < 39) {
-                            _sliderPos = math.min(39.0, _sliderPos + 1);
-                          }
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color.fromRGBO(60, 60, 60, 1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          '-',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                boardRow('Stance', _selectedStance, () async {
+                  await _showBoardPickerDialog(
+                    'Stance',
+                    _selectedStance,
+                    (v) => setState(() => _selectedStance = v),
+                    maxWholeBoard: 50,
+                  );
+                }),
+                const SizedBox(height: 4),
+                boardRow('Target', _targetBoard, () async {
+                  await _showBoardPickerDialog(
+                    'Target',
+                    _targetBoard,
+                    (v) => setState(() => _targetBoard = v),
+                    maxWholeBoard: 40,
+                  );
+                }),
+                const SizedBox(height: 4),
+                boardRow('Breakpoint', _breakpointBoard, () async {
+                  await _showBoardPickerDialog(
+                    'Breakpoint',
+                    _breakpointBoard,
+                    (v) => setState(() => _breakpointBoard = v),
+                    maxWholeBoard: 40,
+                  );
+                }),
                 const SizedBox(height: 6),
-                _buildStanceSlider(scale: 1.0),
-                const SizedBox(height: 10),
-                // Horizontal divider line
-                Container(
-                  width: MediaQuery.of(context).size.width * 0.7,
-                  height: 1,
-                  color: Colors.grey[600],
-                ),
-                const SizedBox(height: 10),
-                // Lane dropdown (horizontal layout)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Lane',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 12,
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Horizontal divider line
+                      Container(
+                        width: MediaQuery.of(context).size.width * 0.7,
+                        height: 1,
+                        color: Colors.grey[600],
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-                      decoration: BoxDecoration(
-                        color: const Color.fromRGBO(90, 90, 90, 1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: DropdownButton<int>(
-                        value: _selectedLane,
-                        dropdownColor: const Color.fromRGBO(80, 80, 80, 1),
-                        underline: const SizedBox(),
-                        isDense: true,
-                        items: [
-                          DropdownMenuItem(
-                            value: 1,
-                            child: Text(
-                              '1',
-                              style: TextStyle(color: Colors.white, fontSize: 12),
-                            ),
+                      const SizedBox(height: 12),
+                    // Lane dropdown (horizontal layout)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Lane',
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 12,
                           ),
-                          DropdownMenuItem(
-                            value: 2,
-                            child: Text(
-                              '2',
-                              style: TextStyle(color: Colors.white, fontSize: 12),
-                            ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 0),
+                          decoration: BoxDecoration(
+                            color: const Color.fromRGBO(90, 90, 90, 1),
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedLane = value ?? 1;
-                          });
-                        },
-                      ),
+                          child: DropdownButton<int>(
+                            value: _selectedLane,
+                            dropdownColor: const Color.fromRGBO(80, 80, 80, 1),
+                            underline: const SizedBox(),
+                            isDense: true,
+                            items: [
+                              DropdownMenuItem(
+                                value: 1,
+                                child: Text(
+                                  '1',
+                                  style: TextStyle(
+                                      color: Colors.white, fontSize: 12),
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 2,
+                                child: Text(
+                                  '2',
+                                  style: TextStyle(
+                                      color: Colors.white, fontSize: 12),
+                                ),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedLane = value ?? 1;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                    const SizedBox(height: 8),
+                    ],
+                  ),
                 ),
-                const Spacer(),
               ],
             );
           } else if (index == 4) {
@@ -741,7 +1052,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
               ],
             );
           } else if (index == 5) {
-            // Board selector page
+            // Impact selector page
             return Column(
               children: [
                 Padding(
@@ -801,13 +1112,17 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 ),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 15),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
                       minimumSize: const Size(80, 30),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      side: const BorderSide(
+                        color: Color.fromRGBO(152, 124, 229, 1),
+                        width: 2,
+                      ),
                     ),
                     onPressed: _submit,
-                    child: const Text('Submit', style: TextStyle(fontSize: 12)),
+                    child: const Text('Submit', style: TextStyle(fontSize: 12, color: Color.fromRGBO(152, 124, 229, 1), fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -817,7 +1132,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
             return Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 30, bottom: 10),
+                  padding: const EdgeInsets.only(top: 12, bottom: 5),
                   child: Text(
                     _titles[index],
                     style: const TextStyle(
@@ -831,16 +1146,8 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildRecordButton(scale: 2.2, round: true),
+                      _buildRecordButton(scale: 3.5, round: true),
                       const SizedBox(height: 20),
-                      Text(
-                        _isRecording ? 'Recording...' : 'Press to Record',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -868,9 +1175,9 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: [
-                          // Last 3 Boards
+                          // Last 3 Impacts
                           Text(
-                            'Last 3 Boards',
+                            'Last 3 Impacts',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 11,
@@ -902,7 +1209,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                           ..._recentStances.map((stance) => Padding(
                             padding: const EdgeInsets.symmetric(vertical: 1),
                             child: Text(
-                              stance.toString(),
+                              stance,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
@@ -1063,7 +1370,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       child: Text(
                         value.toString(),
                         style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black.withOpacity(0.80),
+                          color: isSelected ? Colors.white : Colors.white.withOpacity(0.45),
                           fontSize: isSelected ? 28 : 20,
                           fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
                         ),
@@ -1175,7 +1482,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       child: Text(
                         value.toString(),
                         style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black.withOpacity(0.80),
+                          color: isSelected ? Colors.white : Colors.white.withOpacity(0.45),
                           fontSize: isSelected ? 28 : 20,
                           fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
                         ),
@@ -1282,8 +1589,8 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                         child: Text(
                           labelFormatter(itemIndex),
                           style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.black.withOpacity(0.80),
-                            fontSize: isSelected ? 18 : 14,
+                            color: isSelected ? Colors.white : Colors.white.withOpacity(0.45),
+                            fontSize: isSelected ? 22 : 17,
                             fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
                           ),
                         ),

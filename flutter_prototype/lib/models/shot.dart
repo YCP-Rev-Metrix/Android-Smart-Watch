@@ -4,27 +4,49 @@ class Shot {
   final int ball;
   final int numOfPinsKnocked;
   final int pins;
-  final int board;
-  final int stance;
+  final double impact;
+  final double stance;
+  final double target;
+  final double breakPoint;
   final double speed;
   final int frameNum;
   final int lane;
   final bool isReadOnly; // True if this shot cannot be edited
 
   static const int foulBit = 1 << 10;
+  static const Map<String, int> _impactBoardMap = {
+    'gutter': 0,
+    'right': 11,
+    'light': 13,
+    'light pocket': 16,
+    'pocket': 17,
+    'high pocket': 18,
+    'high': 21,
+    'nose': 20,
+    'brooklyn': 23,
+    'left': 27,
+  };
 
   Shot({
     required this.shotNumber,
     required this.ball,
     required this.numOfPinsKnocked,
     required this.pins,
-    required this.board,
-    required this.stance,
+    num? impact,
+    num? board,
+    num? stance,
+    num? target,
+    num? breakPoint,
     required this.speed,
     required this.frameNum,
     required this.lane,
     this.isReadOnly = false,
-  });
+  })  : impact = (impact ?? board ?? 17).toDouble(),
+        stance = (stance ?? 20).toDouble(),
+        target = (target ?? 20).toDouble(),
+        breakPoint = (breakPoint ?? 20).toDouble();
+
+  int get board => impact.round();
 
   /// Factory to create a read-only default shot with previous pins displayed
   factory Shot.readOnlyDefault({
@@ -81,13 +103,21 @@ class Shot {
   static int buildLeaveType({required List<bool> standingPins, bool isFoul = false}) =>
       buildPins(standingPins: standingPins, isFoul: isFoul);
 
+  static int impactToBoard(String impact) {
+    final key = impact.trim().toLowerCase();
+    return _impactBoardMap[key] ?? 17;
+  }
+
   Map<String, dynamic> toJson() => {
     'shotNumber': shotNumber,
     'ball': ball,
     'numOfPinsKnocked': numOfPinsKnocked,
     'pins': pins,
-    'board': board,
+    'impact': impact,
+    'board': impact,
     'stance': stance,
+    'target': target,
+    'breakPoint': breakPoint,
     'speed': speed,
     'frameNum': frameNum,
     'lane': lane,
@@ -99,8 +129,10 @@ class Shot {
     ball: json['ball'] ?? 0,
     numOfPinsKnocked: json['numOfPinsKnocked'] ?? json['count'] ?? 0,
     pins: json['pins'] ?? json['leaveType'] ?? 0,
-    board: json['board'] ?? json['hitBoard'] ?? 18,
+    impact: (json['impact'] ?? json['board'] ?? json['hitBoard'] ?? 18),
     stance: json['stance'] ?? 20,
+    target: json['target'] ?? json['targetBoard'] ?? 20,
+    breakPoint: json['breakPoint'] ?? json['breakpoint'] ?? 20,
     speed: (json['speed'] ?? 0.0).toDouble(),
     frameNum: json['frameNum'] ?? 0,
     lane: json['lane'] ?? 1,
@@ -130,8 +162,6 @@ class Shot {
     int packetType = 0x03,
     int version1 = 1,
     int? version2,
-    int? target,
-    int? breakPoint,
     int shotIndexInFrame = 1,
   }) {
     const int packetSize = 23; // 22 byte payload + 1 byte padding
@@ -182,13 +212,13 @@ class Shot {
     buffer[idx++] = pins & 0xFF;
 
     // Byte 12: Stance (0-100, stored as x2 for 0.5 values)
-    buffer[idx++] = (stance * 2) & 0xFF;
+    buffer[idx++] = ((stance * 2).toInt()) & 0xFF;
 
     // Byte 13: Target (0-100, stored as x2 for 0.5 values)
-    buffer[idx++] = ((target ?? 0) * 2) & 0xFF;
+    buffer[idx++] = ((target * 2).toInt()) & 0xFF;
 
     // Byte 14: Break Point (0-100, stored as x2 for 0.5 values)
-    buffer[idx++] = ((breakPoint ?? 0) * 2) & 0xFF;
+    buffer[idx++] = ((breakPoint * 2).toInt()) & 0xFF;
 
     // Byte 15: Impact/Board (0-100, stored as x2 for 0.5 values)
     // board is stored as x2 (e.g., 18.5 -> 37)
@@ -292,7 +322,7 @@ class Shot {
       ball: ball,
       numOfPinsKnocked: 0, // Not encoded in new format
       pins: pins,
-      board: board.toInt(),
+      board: board,
       stance: stance,
       speed: speed,
       frameNum: frameNumber,
