@@ -61,7 +61,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
   late List<bool> _selectedPins;
   String? _selectedOutcome;
   bool _isRecording = false;
-  Timer? _recordingTimer;
+  // Timer? _recordingTimer;
   double _selectedStance = 20.0;
   int _selectedLane = 1;
   double _sliderPos = 20;
@@ -612,9 +612,9 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
       setState(() => _isRecording = true);
       await Get.find<BLEManager>().sendRecordingCommand("startRec");
       // Auto-stop after 30 seconds
-      _recordingTimer = Timer(const Duration(seconds: 30), () {
-        _stopRecording();
-      });
+      //_recordingTimer = Timer(const Duration(seconds: 30), () {
+      //  _stopRecording();
+      //});
     }
   }
 
@@ -723,14 +723,14 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     _pageController.dispose();
     _speedScrollController.removeListener(_onSpeedScroll);
     _speedScrollController.dispose();
-    _recordingTimer?.cancel();
+    // _recordingTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _stopRecording() async {
     if (_isRecording) {
-      _recordingTimer?.cancel();
-      _recordingTimer = null;
+      // _recordingTimer?.cancel();
+      // _recordingTimer = null;
       await Get.find<BLEManager>().sendRecordingCommand("stopRec");
       setState(() => _isRecording = false);
     }
