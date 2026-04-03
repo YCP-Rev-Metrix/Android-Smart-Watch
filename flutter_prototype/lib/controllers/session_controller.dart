@@ -599,12 +599,15 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void initializeAnonymous() {
-    // Use a high reserved session ID (0xFFFFFFFF) so phone knows this is an anonymous/test session
-    // Phone can recognize this and handle appropriately (not associated with any stored session)
+  void initializeAnonymous({List<Ball> balls = const []}) {
+    // Anonymous session: same as a normal session, but with a special session ID
+    // so the phone knows it wasn't pre-created. Still has access to user's balls and info.
     activeSessionId = 0xFFFFFFFF;
-    activeBalls = const [];
+    activeBalls = balls;
     activeGameIndex = 0;
+    currentGameNumber = 1;
+    currentGameCount = 1;
+    currentGameScore = 0;
     _activeFrameIndex = 0;
     _activeShotIndex = 1;
     

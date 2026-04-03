@@ -127,7 +127,9 @@ class _SessionsPageState extends State<SessionsPage> {
   }
 
   void _startAnonymousSession() {
-    SessionController().initializeAnonymous();
+    final packet = Get.find<BLEManager>().lastAccountPacket.value;
+    final balls = packet?.balls ?? const [];
+    SessionController().initializeAnonymous(balls: balls);
     Get.to(() => const FrameShell());
   }
 }
