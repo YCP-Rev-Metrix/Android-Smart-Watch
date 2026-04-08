@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/ble_manager.dart';
+import '../controllers/session_controller.dart';
 
 class DevSettingsPage extends StatefulWidget {
   const DevSettingsPage({super.key});
@@ -11,7 +12,7 @@ class DevSettingsPage extends StatefulWidget {
 
 class _DevSettingsPageState extends State<DevSettingsPage> {
   final ble = Get.find<BLEManager>();
-  bool isDarkMode = true;
+  bool isSyncing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -98,23 +99,61 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
 
               const SizedBox(height: 6),
 
-              // Light/Dark Mode Button
+              // Sync Session Button
               Center(
                 child: SizedBox(
                   width: 150,
                   height: 28,
                   child: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        isDarkMode = !isDarkMode;
-                      });
-                    },
+                    onPressed: isSyncing
+                        ? null
+                        : () async {
+                            setState(() {
+                              isSyncing = true;
+                            });
+                            try {
+                              final sessionController = SessionController();
+                              
+                              // Listen for the next packet arrival
+                              final subscription = ble.lastAccountPacket.listen((packet) {
+                                if (packet != null) {
+                                  print('WATCH: Sync received new AccountPacket, updating session');
+                                  sessionController.initializeFromPacket(
+                                    sessionId: packet.sessionId,
+                                    gameNumber: packet.gameNumber ?? 1,
+                                    frameNumber: packet.frameNumber ?? 1,
+                                    shotNumber: packet.shotNumber ?? 1,
+                                    balls: packet.balls,
+                                    gameCount: packet.gameCount,
+                                    gameStates: packet.gameStates,
+                                  );
+                                }
+                              });
+                              
+                              await ble.sendSyncCommand();
+                              print('WATCH: Sync command sent to phone');
+                              
+                              // Wait for response with timeout
+                              await Future.delayed(const Duration(seconds: 3));
+                              subscription.cancel();
+                            } catch (e) {
+                              print('WATCH: Failed to send sync: $e');
+                            } finally {
+                              if (mounted) {
+                                setState(() {
+                                  isSyncing = false;
+                                });
+                              }
+                            }
+                          },
                     style: ElevatedButton.styleFrom(
                       padding: EdgeInsets.zero,
-                      backgroundColor: const Color.fromRGBO(142, 124, 195, 1),
+                      backgroundColor: isSyncing
+                          ? const Color.fromRGBO(100, 100, 100, 1)
+                          : const Color.fromRGBO(142, 124, 195, 1),
                     ),
                     child: Text(
-                      isDarkMode ? "Light Mode" : "Dark Mode",
+                      isSyncing ? "Syncing..." : "Sync",
                       style: const TextStyle(
                         fontSize: 9,
                         color: Colors.white,

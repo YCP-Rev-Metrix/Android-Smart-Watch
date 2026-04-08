@@ -163,6 +163,14 @@ class _ShotInputPageState extends State<ShotInputPage> {
     
     // Initialize from widget parameters
     _selectedBall = widget.initialBall;
+    
+    // Ensure selected ball exists in the available balls list; fallback to first ball if not found
+    if (widget.balls != null && widget.balls!.isNotEmpty) {
+      final ballExists = widget.balls!.any((b) => b.id == _selectedBall);
+      if (!ballExists) {
+        _selectedBall = widget.balls!.first.id;
+      }
+    }
     if (widget.startInPost) {
       _selectedBoard = _resolveInitialImpactIndex(widget.initialImpact);
     } else {
