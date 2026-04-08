@@ -158,7 +158,6 @@ class Shot {
   List<int> encodeToBinary({
     required int sessionId,
     required int gameNumber,
-    required int gameScore,
     int packetType = 0x03,
     int version1 = 1,
     int? version2,
@@ -232,13 +231,7 @@ class Shot {
     // Byte 18: Lane # (0-160)
     buffer[idx++] = lane & 0xFF;
 
-    // Bytes 19-21: Game Score (3 bytes, little-endian, unsigned 24-bit integer)
-    final score = gameScore & 0xFFFFFF;
-    buffer[idx++] = score & 0xFF;
-    buffer[idx++] = (score >> 8) & 0xFF;
-    buffer[idx++] = (score >> 16) & 0xFF;
-
-    // Byte 22: Padding (already filled with 0)
+    // Bytes 19-22: Padding (already filled with 0)
 
     return buffer;
   }

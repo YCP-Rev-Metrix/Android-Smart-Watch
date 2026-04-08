@@ -18,7 +18,13 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // Listen for BLE connection
+    // Check if already connected
+    if (ble.isConnected.value) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Get.to(() => const SessionsPage());
+      });
+    }
+    // Listen for BLE connection changes
     ever(ble.isConnected, (isConnected) {
       if (isConnected) {
         // Navigate to Sessions page on successful connection

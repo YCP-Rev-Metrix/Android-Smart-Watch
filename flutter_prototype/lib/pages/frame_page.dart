@@ -97,7 +97,7 @@ class _FrameShellState extends State<FrameShell> {
 			builder: (context, child) {
 				final inputFrameIndex = _currentActiveFrameIndex;
 
-				final gameFrames = _sessionController.currentSession!.games.first.frames;
+				final gameFrames = _sessionController.currentSession!.games[_sessionController.activeGameIndex].frames;
 				final maxValidIndex = gameFrames.length - 1;
 
 
@@ -182,7 +182,7 @@ class _BowlingFrameState extends State<BowlingFrame> {
 
 	// Helper to determine the correct starting page
 	void _initializeController() {
-		final frame = _sessionController.currentSession!.games.first.frames[widget.frameIndex];
+		final frame = _sessionController.currentSession!.games[_sessionController.activeGameIndex].frames[widget.frameIndex];
 		
 		final initialPage = widget.isInputActive 
 			? frame.shots.length 
@@ -204,7 +204,7 @@ class _BowlingFrameState extends State<BowlingFrame> {
 			_initializeController();
 		} else if (widget.isInputActive) {
 			// Case 2: Same frame, but a shot was recorded (or pins were cleared)
-			final frame = _sessionController.currentSession!.games.first.frames[newFrameIndex];
+			final frame = _sessionController.currentSession!.games[_sessionController.activeGameIndex].frames[newFrameIndex];
 			final newPage = frame.shots.length; // The index for the next shot is current shots.length
 			final currentPage = _controller.page?.round() ?? 0;
 			// If the new shot count is greater than the current visible page, animate to the new page.
@@ -226,7 +226,7 @@ class _BowlingFrameState extends State<BowlingFrame> {
 
 	@override
 	Widget build(BuildContext context) {
-		final activeGame = _sessionController.currentSession!.games.first;
+		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
 		final frame = activeGame.frames[widget.frameIndex];
 
 		final maxShotSlots = (widget.frameIndex == 9) ? 3 : 2;
@@ -378,7 +378,7 @@ class _FrameSelectionOverlayState extends State<FrameSelectionOverlay> {
 						itemBuilder: (context, i) {
 							final active = i == _selected;
 							
-							final isComplete = _sessionController.currentSession!.games.first.frames[i].isComplete;
+							final isComplete = _sessionController.currentSession!.games[_sessionController.activeGameIndex].frames[i].isComplete;
 							
 							final int colorIndex = i % widget.colors.length;
 							
@@ -483,7 +483,7 @@ class _BowlingShotState extends State<BowlingShot> {
 
 	// Reads the current/previous shot data from the controller models
 	void _updateShotDisplay() {
-		final activeGame = _sessionController.currentSession!.games.first;
+		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
 		final frame = activeGame.frames[widget.frameIndex];
 	
 		// Determine which shot data to display (if any)
@@ -531,7 +531,7 @@ class _BowlingShotState extends State<BowlingShot> {
 	}
 
 	void _openShotPage() async {
-		final activeGame = _sessionController.currentSession!.games.first;
+		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
 		final frame = activeGame.frames[widget.frameIndex];
 		
 		// Don't open if this is a read-only shot
@@ -681,7 +681,7 @@ class _BowlingShotState extends State<BowlingShot> {
 	Widget _buildPin(int pinNumber, List<bool> pinsDownList, int shotIndex) {
 		final index = pinNumber - 1;
 		final isDown = pinsDownList[index];
-		final activeGame = _sessionController.currentSession!.games.first;
+		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
 		final frame = activeGame.frames[widget.frameIndex];
 		Color pinColor;
 		
@@ -819,7 +819,7 @@ class _BowlingShotState extends State<BowlingShot> {
 	@override
 	Widget build(BuildContext context) {
 		final displayFrameNumber = widget.frameIndex + 1;
-		final activeGame = _sessionController.currentSession!.games.first;
+		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
 		final frame = activeGame.frames[widget.frameIndex];
 		final shotToDisplay = frame.shots.length >= widget.shotIndex
 			? frame.shots[widget.shotIndex - 1]

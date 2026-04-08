@@ -317,6 +317,10 @@ class BLEManager extends GetxController {
     await sendRecordingCommand("stopRec");
   }
 
+  Future<void> sendSyncCommand() async {
+    await sendJsonToPhone({"cmd": "sync"});
+  }
+
   /// Try to parse the buffer as an account packet (type 0x01)
   Future<void> _tryParseAccountPacket() async {
     try {
