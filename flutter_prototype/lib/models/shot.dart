@@ -104,8 +104,21 @@ class Shot {
       buildPins(standingPins: standingPins, isFoul: isFoul);
 
   static int impactToBoard(String impact) {
+    if (impact.isEmpty) return 0;
     final key = impact.trim().toLowerCase();
     return _impactBoardMap[key] ?? 17;
+  }
+
+  static int secondShotImpactToBoard(String impact) {
+    switch (impact.trim().toLowerCase()) {
+      case 'right': return 1;
+      case 'left': return 2;
+      case 'chop': return 3;
+      case 'tap': return 4;
+      case 'gutter': return 5;
+      case 'foul': return 6;
+      default: return 0;
+    }
   }
 
   Map<String, dynamic> toJson() => {
@@ -158,7 +171,6 @@ class Shot {
   List<int> encodeToBinary({
     required int sessionId,
     required int gameNumber,
-    required int gameScore,
     int packetType = 0x03,
     int version1 = 1,
     int? version2,
@@ -232,13 +244,7 @@ class Shot {
     // Byte 18: Lane # (0-160)
     buffer[idx++] = lane & 0xFF;
 
-    // Bytes 19-21: Game Score (3 bytes, little-endian, unsigned 24-bit integer)
-    final score = gameScore & 0xFFFFFF;
-    buffer[idx++] = score & 0xFF;
-    buffer[idx++] = (score >> 8) & 0xFF;
-    buffer[idx++] = (score >> 16) & 0xFF;
-
-    // Byte 22: Padding (already filled with 0)
+    // Bytes 19-22: Padding (already filled with 0)
 
     return buffer;
   }
