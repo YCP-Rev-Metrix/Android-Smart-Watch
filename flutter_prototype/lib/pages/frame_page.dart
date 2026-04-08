@@ -465,6 +465,7 @@ class _BowlingShotState extends State<BowlingShot> {
 	double stance = 20.0;
 	double target = 20.0;
 	double breakPoint = 20.0;
+	bool _showEmptyInfoBarValues = false;
 	List<bool> pinsDown = List.filled(10, false);
 	@override
 	void didChangeDependencies() {
@@ -485,6 +486,7 @@ class _BowlingShotState extends State<BowlingShot> {
 	void _updateShotDisplay() {
 		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
 		final frame = activeGame.frames[widget.frameIndex];
+		final previousMatchingShot = _findPreviousSameLaneShot(activeGame, frame.lane, widget.shotIndex);
 	
 		// Determine which shot data to display (if any)
 		final shotToDisplay = frame.shots.length >= widget.shotIndex
@@ -493,6 +495,7 @@ class _BowlingShotState extends State<BowlingShot> {
 			
 		setState(() {
 			if (shotToDisplay != null) {
+				_showEmptyInfoBarValues = false;
 				pinsDown = shotToDisplay.pinsState.map((isStanding) => !isStanding).toList();
 				lane = frame.lane;
 				board = shotToDisplay.impact;
@@ -502,18 +505,17 @@ class _BowlingShotState extends State<BowlingShot> {
 				target = shotToDisplay.target;
 				breakPoint = shotToDisplay.breakPoint;
 			} else {
-			// Shot hasn't been submitted yet
-			if (frame.shots.isNotEmpty) {
-				final lastShot = frame.shots.last;
-				// For shot 2 before submission, show pins from shot 1 (convert standing to knocked down format)
-				pinsDown = lastShot.pinsState.map((isStanding) => !isStanding).toList();
-				lane = frame.lane;
-				board = lastShot.impact;
-				speed = lastShot.speed;
-				ball = lastShot.ball;
-				stance = lastShot.stance;
-				target = lastShot.target;
-				breakPoint = lastShot.breakPoint;
+			// Shot hasn't been submitted yet.
+			if (previousMatchingShot != null) {
+				pinsDown = previousMatchingShot.pinsState.map((isStanding) => !isStanding).toList();
+				lane = previousMatchingShot.lane;
+				board = previousMatchingShot.impact;
+				speed = previousMatchingShot.speed;
+				ball = previousMatchingShot.ball;
+				stance = previousMatchingShot.stance;
+				target = previousMatchingShot.target;
+				breakPoint = previousMatchingShot.breakPoint;
+				_showEmptyInfoBarValues = false;
 			} else {
 				// Use controller-level defaults when this frame has no prior shots
 				pinsDown = List.filled(10, true);
@@ -525,9 +527,20 @@ class _BowlingShotState extends State<BowlingShot> {
 				stance = _sessionController.defaultStanceByLane[lane] ?? 20.0;
 				target = _sessionController.defaultTargetByLane[lane] ?? 20.0;
 				breakPoint = _sessionController.defaultBreakPointByLane[lane] ?? 20.0;
+				_showEmptyInfoBarValues = true;
 			}
 			}
 		});
+	}
+
+	Shot? _findPreviousSameLaneShot(dynamic activeGame, int lane, int shotIndex) {
+		for (int frameIdx = widget.frameIndex - 1; frameIdx >= 0; frameIdx--) {
+			final candidateFrame = activeGame.frames[frameIdx];
+			if (candidateFrame.lane == lane && candidateFrame.shots.length >= shotIndex) {
+				return candidateFrame.shots[shotIndex - 1];
+			}
+		}
+		return null;
 	}
 
 	void _openShotPage() async {
@@ -557,7 +570,7 @@ class _BowlingShotState extends State<BowlingShot> {
 						frameIdx < widget.frameIndex ||
 						(frameIdx == widget.frameIndex && shotIndexInFrame < widget.shotIndex);
 
-				if (isBeforeCurrentPosition && shotIndexInFrame == widget.shotIndex) {
+				if (isBeforeCurrentPosition) {
 					matchingPriorShots.add(frame.shots[shotIdx]);
 				}
 			}
@@ -634,13 +647,14 @@ class _BowlingShotState extends State<BowlingShot> {
 		final int pinsDownCount = shotResult['pinsDownCount'] as int;
 		final bool isFoul = shotResult['isFoul'] as bool;
 		final int selectedBall = shotResult['ball'] as int? ?? ball;
+		final double selectedStance = (shotResult['stance'] as num?)?.toDouble() ?? stance;
 	
 		_sessionController.recordShot(
 			lane: lane,
 			speed: speed,
 			impact: board,
 			ball: selectedBall,
-			stance: stance,
+			stance: selectedStance,
 			target: target,
 			breakPoint: breakPoint,
 			standingPins: pinsStandingResult,
@@ -738,8 +752,7 @@ class _BowlingShotState extends State<BowlingShot> {
 	}
 
 
-	Widget _buildInfoBar(int lane, double board, double speed, int ball) {
-		const double height = 38;
+	Widget _buildInfoBar(double stance, double board, double speed, int ball, {bool showEmptyValues = false}) {
 		const impactAbbreviations = <int, String>{
 			0: 'GUT',
 			11: 'R',
@@ -757,60 +770,94 @@ class _BowlingShotState extends State<BowlingShot> {
 		final boardDisplay = isWholeImpact
 			? (impactAbbreviations[roundedImpact] ?? roundedImpact.toString())
 			: board.toStringAsFixed(1);
+		final ballDisplay = showEmptyValues ? '' : ball.toString();
+		final stanceDisplay = showEmptyValues ? '' : stance.toStringAsFixed(1);
+		final impactDisplay = showEmptyValues ? '' : boardDisplay;
+		final speedDisplay = showEmptyValues ? '' : speed.toStringAsFixed(1);
+		return SizedBox(
+			height: 110,
+			width: 240,
+			child: Stack(
+				alignment: Alignment.bottomCenter,
+				children: [
+					Positioned(
+						left: 4,
+						bottom: 42,
+						child: _buildInfoOrb('Ball', ballDisplay, 54),
+					),
+					Positioned(
+						left: 56,
+						bottom: 14,
+						child: _buildInfoOrb('Stance', stanceDisplay, 56),
+					),
+					Positioned(
+						right: 56,
+						bottom: 14,
+						child: _buildInfoOrb('Impact', impactDisplay, 56),
+					),
+					Positioned(
+						right: 4,
+						bottom: 42,
+						child: _buildInfoOrb('Speed', speedDisplay, 54),
+					),
+				],
+			),
+		);
+	}
+
+	Widget _buildInfoOrb(String label, String value, double size) {
 		return Container(
-			height: height,
-			padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+			width: size,
+			height: size,
 			decoration: BoxDecoration(
-				color: const Color.fromRGBO(153, 153, 153, 1),
-				border: Border.all(color: Colors.black, width: 0.5),
-			),
-			child: Row(
-				mainAxisSize: MainAxisSize.min,
-				mainAxisAlignment: MainAxisAlignment.center,
-				children: [
-					_buildInfoCell('Lane', lane.toString()),
-					_buildDivider(),
-					_buildInfoCell('Impact', boardDisplay),
-					_buildDivider(),
-					_buildInfoCell('Speed', speed.toStringAsFixed(1)),
-					_buildDivider(),
-					_buildInfoCell('Ball', ball.toString()),
-				],
-			),
-		);
-	}
-	Widget _buildDivider() {
-		return Container(
-			width: 1,
-			height: 24,
-			color: Colors.black.withOpacity(0.4),
-			margin: const EdgeInsets.symmetric(horizontal: 3),
-		);
-	}
-
-
-	Widget _buildInfoCell(String label, String value) {
-		return Container(
-			width: 32,
-			padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 0),
-			child: Column(
-				mainAxisSize: MainAxisSize.min,
-				mainAxisAlignment: MainAxisAlignment.center,
-				children: [
-					Text(
-						label,
-						maxLines: 1,
-						overflow: TextOverflow.ellipsis,
-						style: const TextStyle(color: Colors.black, fontSize: 8, height: 1.0),
-					),
-					const SizedBox(height: 1),
-					Text(
-						value,
-						maxLines: 1,
-						overflow: TextOverflow.ellipsis,
-						style: const TextStyle(color: Colors.black, fontSize: 11, height: 1.0),
+				shape: BoxShape.circle,
+				gradient: const LinearGradient(
+					begin: Alignment.topLeft,
+					end: Alignment.bottomRight,
+					colors: [
+						Color.fromRGBO(236, 236, 236, 1),
+						Color.fromRGBO(188, 188, 188, 1),
+					],
+				),
+				border: Border.all(color: Colors.black, width: 0.9),
+				boxShadow: [
+					BoxShadow(
+						color: Colors.black.withOpacity(0.28),
+						blurRadius: 6,
+						offset: const Offset(0, 2),
 					),
 				],
+			),
+			child: Padding(
+				padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+				child: Column(
+					mainAxisAlignment: MainAxisAlignment.center,
+					children: [
+						Text(
+							label,
+							maxLines: 1,
+							overflow: TextOverflow.ellipsis,
+							style: const TextStyle(
+								color: Colors.black,
+								fontSize: 10,
+								fontWeight: FontWeight.w700,
+								height: 1,
+							),
+						),
+						const SizedBox(height: 2),
+						Text(
+							value,
+							maxLines: 1,
+							overflow: TextOverflow.ellipsis,
+							style: const TextStyle(
+								color: Colors.black,
+								fontSize: 14,
+								fontWeight: FontWeight.bold,
+								height: 1,
+							),
+						),
+					],
+				),
 			),
 		);
 	}
@@ -846,7 +893,7 @@ class _BowlingShotState extends State<BowlingShot> {
 								child: Column(
 									mainAxisSize: MainAxisSize.min,
 									children: [
-										const SizedBox(height: 24),
+										const SizedBox(height: 14),
 										Text(
 											'Frame $displayFrameNumber — Shot ${widget.shotIndex}${isReadOnly ? ' (View)' : ''}',
 											style: TextStyle(
@@ -855,15 +902,25 @@ class _BowlingShotState extends State<BowlingShot> {
 												fontWeight: FontWeight.bold,
 											),
 										),
-										const SizedBox(height: 12),
+										const SizedBox(height: 8),
 										_buildPinDisplay(pinsDown),
-										const SizedBox(height: 6),
+										const SizedBox(height: 4),
 									],
 								),
 							),
-							Transform.scale(
-								scale: 0.8,
-								child: _buildInfoBar(lane, board, speed, ball),
+							Expanded(
+								child: Center(
+									child: Transform.scale(
+										scale: 0.72,
+										child: _buildInfoBar(
+											stance,
+											board,
+											speed,
+											ball,
+											showEmptyValues: _showEmptyInfoBarValues,
+										),
+									),
+								),
 							),
 						],
 					),
