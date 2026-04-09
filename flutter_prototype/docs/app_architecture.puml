@@ -1,0 +1,343 @@
+@startuml Android_Smart_Watch_Bowling_App
+
+left to right direction
+
+!define GREEN_COLOR #E1FFE1
+!define YELLOW_COLOR #FFFFCC
+!define BLUE_COLOR #E1F0FF
+!define PURPLE_COLOR #F0E1FF
+!define RED_COLOR #FFE1E1
+
+skinparam classBackgroundColor<<Model>> GREEN_COLOR
+skinparam classBackgroundColor<<Controller>> GREEN_COLOR
+skinparam classBackgroundColor<<UI>> GREEN_COLOR
+skinparam classBackgroundColor<<Utility>> GREEN_COLOR
+skinparam classBackgroundColor<<Main>> RED_COLOR
+
+skinparam scale 0.4
+skinparam margin 0
+skinparam padding 0
+skinparam minClassWidth 80
+skinparam nopadding true
+
+' ==================== MODELS ====================
+
+package Models {
+    class GameSession <<Model>> #FFFFCC {
+        + sessionId: String
+        + startTime: DateTime
+        + endTime: DateTime?
+        + isComplete: bool
+        + numOfGames: int
+        + balls: List<Ball>
+        + games: List<Game>
+        --
+        + {static} newSession(String): GameSession
+        + activeGame: Game?
+        + completeSession(): void
+        + toJson(): Map<String, dynamic>
+        + {static} fromJson(Map): GameSession
+    }
+
+    class Game <<Model>> {
+        + gameNumber: int
+        + score: int
+        + startingLane: int
+        + lanes: List<int>
+        + frames: List<Frame>
+        --
+        + {static} newGame(int, int): Game
+        + currentFrame: Frame?
+        + isComplete: bool
+        + toJson(): Map<String, dynamic>
+        + {static} fromJson(Map): Game
+    }
+
+    class Frame <<Model>> {
+        + frameNumber: int
+        + lane: int
+        + shots: List<Shot>
+        --
+        + isComplete: bool
+        + totalPinsDown: int
+        + copyWithShot(Shot): Frame
+        + toJson(): Map<String, dynamic>
+        + {static} fromJson(Map): Frame
+    }
+
+    class Shot <<Model>> #FFFFCC {
+        + shotNumber: int
+        + ball: int
+        + numOfPinsKnocked: int
+        + pins: int
+        + impact: double
+        + stance: double
+        + target: double
+        + breakPoint: double
+        + speed: double
+        + frameNum: int
+        + lane: int
+        + isReadOnly: bool
+        - {static} foulBit: int
+        --
+        + board: int (getter)
+        + isFoul: bool
+        + pinsStanding: int
+        + pinsState: List<bool>
+        + {static} buildPins(List<bool>, bool): int
+        + {static} impactToBoard(String): int
+        + encodeToBinary(sessionId, gameNumber, gameScore): List<int>
+        + {static} decodeFromBinary(List<int>): Map<String, dynamic>
+        + toJson(): Map<String, dynamic>
+        + {static} fromJson(Map): Shot
+    }
+
+    class AccountPacket <<Model>> #E1F0FF {
+        + sessionId: int
+        + eventName: String
+        + frameNumber: int
+        + gameNumber: int
+        + shotNumber: int
+        + primaryHand: String
+        + gameCount: int
+        + previousPins: String
+        + gameScore: int
+        + balls: List<Ball>
+        + username: String
+        + userId: String
+        --
+        + {static} fromBinary(List<int>): AccountPacket?
+    }
+}
+
+' ==================== CONTROLLERS ====================
+
+package Controllers {
+    class BLEManager <<Controller>> {
+        + isAdvertising: Rx<bool>
+        + gattReady: Rx<bool>
+        + isConnected: Rx<bool>
+        + connectedDeviceAddress: Rx<String>
+        + lastAccountPacket: Rx<AccountPacket?>
+        - _incomingBuffer: List<int>
+        - _lastChunkTime: DateTime?
+        - _localNotif: FlutterLocalNotificationsPlugin
+        - {static} _channel: MethodChannel
+        --
+        + initGattServer(): Future<void>
+        + startAdvertising(): Future<void>
+        + stopAdvertising(): Future<void>
+        + sendRawBLEPacket(List<int>): Future<void>
+        + sendJsonToPhone(Map): Future<void>
+        - _handleNativeCalls(MethodCall): Future
+        - _tryParseAccountPacket(List<int>): void
+        - _tryParseJsonPacket(String): void
+        - _showLocalNotification(String, String): Future<void>
+        - _initLocalNotifications(): Future<void>
+    }
+
+    class BLEPacketController <<Controller>> {
+        + isTransmitting: Rx<bool>
+        + currentPacket: Rx<int>
+        + totalPackets: Rx<int>
+        + lastError: Rx<String?>
+        - {static} PACKET_DELAY_MS: int
+        --
+        + sendSessionOverBLE(GameSession): Future<void>
+        + getProgressPercentage(): double
+        + getStatusMessage(): String
+        - _sendPacket(BLEPacket): Future<void>
+    }
+
+    class SessionController <<Controller>> #FFFFCC {
+        - currentSession: GameSession?
+        - _activeGameIndex: int
+        - _activeFrameIndex: int
+        - _activeShotIndex: int
+        - defaultStanceByLane: Map<int, double>
+        - defaultTargetByLane: Map<int, double>
+        - defaultBreakPointByLane: Map<int, double>
+        - {static} _instance: SessionController
+        --
+        + activeGameIndex: int
+        + activeFrameIndex: int
+        + activeShotIndex: int
+        + recordShot(Shot, selectedBall): Future<void>
+        + createNewSessionFromPacket(AccountPacket): void
+        + initializeFromPacket(AccountPacket): void
+        + initializeAnonymous(): void
+        + setActiveGame(int): void
+        + setActiveFrame(int): void
+        + updateShot(Shot): void
+        + {static} getInstance(): SessionController
+    }
+
+    class LocalCache <<Controller>> #FFFFCC {
+        --
+        + saveSession(GameSession): void
+        + loadLastSession(): GameSession?
+        + loadAllUnsent(): List<GameSession>
+        + markAllSent(): void
+        + clearCache(): void
+    }
+
+    class PacketQueue <<Controller>> #FFFFCC {
+        - _queue: Queue<Shot>
+        - _processingTimer: Timer?
+        - {static} instance: PacketQueue
+        --
+        + enqueue(Shot): void
+        + dequeue(): Shot?
+        + peek(): Shot?
+        + length: int
+        + isEmpty: bool
+        - _startProcessing(): void
+    }
+}
+
+' ==================== UTILITIES ====================
+
+package Utilities {
+    class BowlingScorer <<Utility>> #E1F0FF {
+        --
+        + {static} calculateGameScore(List<Frame>, int): int
+        + {static} calculateFrameScores(List<Frame>, int): List<int>
+        + {static} getFrameOutcome(Frame): String
+        - {static} _getNextOneShot(List<Frame>, int): int
+        - {static} _getNextTwoShots(List<Frame>, int): int
+    }
+}
+
+' ==================== UI PAGES ====================
+
+package UI_Pages {
+    class HomePage <<UI>> {
+        - ble: BLEManager
+        --
+        + initState(): void
+        + build(): Widget
+        - initializeBLE(): Future<void>
+        - startForegroundBleService(): Future<void>
+    }
+
+    class SessionsPage <<UI>> {
+        --
+        + build(): Widget
+        - _startEventSession(): void
+        - _startAnonymousSession(): void
+    }
+
+    class GamePage <<UI>> {
+        - _sessionController: SessionController
+        - _activeGame: int
+        - _gameSelectMode: bool
+        - gameColors: List<Color>
+        --
+        + build(): Widget
+        --
+        GameShell:
+            - _onVerticalSwipe(DragEndDetails): void
+            - _enterGameSelection(): void
+            - _exitGameSelection(): void
+            - _selectGame(int): void
+        GameSelectionOverlay
+        BowlingGame
+    }
+
+    class FramePage <<UI>> #FFFFCC {
+        - _sessionController: SessionController
+        - _viewFrameIndex: int
+        - _frameSelectMode: bool
+        - frameColorPalette: List<Color>
+        - _controller: PageController
+        --
+        + build(): Widget
+        --
+        FrameShell:
+            - _onVerticalSwipe(DragEndDetails): void
+            - _enterFrameSelection(): void
+            - _exitFrameSelection(): void
+            - _selectFrame(int): void
+            - _updateShotDisplay(): void
+        FrameSelectionOverlay
+        BowlingFrame
+    }
+
+    class ShotInputPage <<UI>> #FFFFCC {
+        + initialPins: List<bool>
+        + recentShots: List<Shot>
+        + shotNumber: int
+        + frameShotIndex: int
+        + frameNumber: int
+        + initialLane: int
+        + initialImpact: double
+        + initialBall: int
+        + initialSpeed: double
+        + initialStance: double
+        + initialTarget: double
+        + initialBreakPoint: double
+        + startInPost: bool
+        + initialIsFoul: bool?
+        + balls: List<Ball>?
+        --
+        + build(): Widget
+        - _buildRecentImpactLabels(): List<String>
+        - _buildRecentStanceLabels(): List<String>
+        - _buildPinDisplay(bool, bool, double, bool): Widget
+        - _buildPinNumbered(int, double, bool): Widget
+        - _buildStanceSlider(double): Widget
+        - _buildDualSpeedPickers(): Widget
+        - _buildVerticalListPicker(): Widget
+        - _showBoardPickerDialog(): void
+        - _submit(): void
+        - _onPageChanged(int): void
+    }
+
+    class DevSettingsPage <<UI>> #FFFFCC {
+        - ble: BLEManager
+        - isDarkMode: bool
+        --
+        + build(): Widget
+    }
+}
+
+' ==================== RELATIONSHIPS ====================
+
+' Model Hierarchy & Composition
+GameSession "1" *-- "1..*" Game : contains
+Game "1" *-- "10" Frame : contains
+Frame "1" *-- "1..3" Shot : contains
+
+' Controller Dependencies
+BLEManager --> AccountPacket : receives/parses
+SessionController --> GameSession : manages
+SessionController --> BowlingScorer : uses for scoring
+LocalCache --> GameSession : persists
+PacketQueue --> Shot : queues
+BLEPacketController --> GameSession : encodes
+BLEPacketController --> BLEManager : uses
+
+' UI to Controllers
+HomePage --> BLEManager : monitors
+SessionsPage --> SessionController : creates session
+GamePage --> SessionController : uses state
+FramePage --> SessionController : uses state
+ShotInputPage --> SessionController : uses
+
+' UI to Models/Services
+ShotInputPage --> Shot : displays
+ShotInputPage --> PacketQueue : enqueues
+
+' UI Navigation Flow
+HomePage --> SessionsPage : navigates
+SessionsPage --> GamePage : navigates
+GamePage --> FramePage : navigates (swipe)
+FramePage --> GamePage : navigates (swipe)
+FramePage --> ShotInputPage : navigates
+SessionController --> BowlingScorer : calculates
+BowlingScorer --> Shot : analyzes
+BowlingScorer --> Frame : analyzes
+
+
+
+@enduml
