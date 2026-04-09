@@ -801,7 +801,19 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     double impactBoard = 0.0;
     if (_selectedOutcome == '/' || _selectedOutcome == 'F' || _selectedOutcome == '-') {
       // Impact is 0 when spare, foul, or gutter/miss
-      impactBoard = 0.0;
+      if (_selectedOutcome == '/' && widget.frameShotIndex == 2) {
+        // Spare on shot 2: use value 7
+        impactBoard = 7.0;
+      } else if (_selectedOutcome == 'F' && widget.frameShotIndex == 2) {
+        // Foul on shot 2: use value 6
+        impactBoard = 6.0;
+      } else if (_selectedOutcome == '-' && widget.frameShotIndex == 2) {
+        // Gutter on shot 2: use value 5
+        impactBoard = 5.0;
+      } else {
+        // Shot 1 or default: impact 0
+        impactBoard = 0.0;
+      }
     } else {
       if (_boardOptions.isNotEmpty && _selectedBoard < _boardOptions.length) {
         final selectedImpact = _boardOptions[_selectedBoard];

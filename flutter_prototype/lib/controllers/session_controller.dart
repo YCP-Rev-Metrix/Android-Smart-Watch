@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +10,6 @@ import 'package:get/get.dart';
 import '../models/frame.dart';
 import '../models/shot.dart';
 import '../models/account_packet.dart';
-import '../utils/bowling_scorer.dart';
 import './ble_manager.dart'; 
 
 // ----------------------------------------------------------------------
@@ -701,9 +701,9 @@ class SessionController extends ChangeNotifier {
   }
 
   void initializeAnonymous({List<Ball> balls = const []}) {
-    // Anonymous session: same as a normal session, but with a special session ID
-    // so the phone knows it wasn't pre-created. Still has access to user's balls and info.
-    activeSessionId = 0xFFFFFFFF;
+    // Anonymous session: same as a normal session, but with a random session ID
+    // above 100,000 so the phone knows it wasn't pre-created. Still has access to user's balls and info.
+    activeSessionId = Random().nextInt(0xFFFFFFFF - 100000) + 100000;
     activeBalls = balls;
     activeGameIndex = 0;
     currentGameNumber = 1;

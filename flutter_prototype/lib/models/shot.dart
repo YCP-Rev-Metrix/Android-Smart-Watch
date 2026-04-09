@@ -117,6 +117,7 @@ class Shot {
       case 'tap': return 4;
       case 'gutter': return 5;
       case 'foul': return 6;
+      case 'spare': return 7;
       default: return 0;
     }
   }
