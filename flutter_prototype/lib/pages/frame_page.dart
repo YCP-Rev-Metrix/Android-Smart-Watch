@@ -915,8 +915,7 @@ class _BowlingShotState extends State<BowlingShot> {
 		final isReadOnly = shotToDisplay?.isReadOnly ?? false;
 		
 		// Determine if this is a special outcome (spare, foul, or gutter)
-		final isSpecialOutcome = shotToDisplay != null && 
-			(shotToDisplay.isFoul || shotToDisplay.impact == 0);
+
 
 		return Scaffold(
 			backgroundColor: widget.color,
@@ -947,16 +946,15 @@ class _BowlingShotState extends State<BowlingShot> {
 												fontWeight: FontWeight.bold,
 											),
 										),
-										const SizedBox(height: 8),
+										const SizedBox(height: 7),
 										_buildPinDisplay(pinsDown),
-										const SizedBox(height: 6),
 									],
 								),
 							),
 							Expanded(
 								child: Center(
 									child: Transform.scale(
-										scale: 0.72,
+										scale: 0.85,
 										child: _buildInfoBar(
 											stance,
 											board,
