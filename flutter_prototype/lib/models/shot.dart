@@ -104,8 +104,22 @@ class Shot {
       buildPins(standingPins: standingPins, isFoul: isFoul);
 
   static int impactToBoard(String impact) {
+    if (impact.isEmpty) return 0;
     final key = impact.trim().toLowerCase();
     return _impactBoardMap[key] ?? 17;
+  }
+
+  static int secondShotImpactToBoard(String impact) {
+    switch (impact.trim().toLowerCase()) {
+      case 'right': return 1;
+      case 'left': return 2;
+      case 'chop': return 3;
+      case 'tap': return 4;
+      case 'gutter': return 5;
+      case 'foul': return 6;
+      case 'spare': return 7;
+      default: return 0;
+    }
   }
 
   Map<String, dynamic> toJson() => {
