@@ -29,7 +29,7 @@ class Game {
   static Game createEmpty(int gameNumber, {int? incomingScore, int startingFrameIndex = 0}) {
     return Game(
       gameNumber: gameNumber,
-      frames: List.generate(10, (i) => Frame(frameNumber: i + 1, lane: 1)),
+      frames: List.generate(12, (i) => Frame(frameNumber: i + 1, lane: 1)),
       incomingScore: incomingScore,
       startingFrameIndex: startingFrameIndex,
     );
@@ -285,8 +285,8 @@ class SessionController extends ChangeNotifier {
     // Use the stored active index
     final activeFrameIndexForUpdate = _activeFrameIndex;
 
-    // Check for game over state
-    if (activeGame == null || activeFrameIndexForUpdate >= 10) return;
+    // Check for game over state (frames 0-11 are valid, so allow up to index 11)
+    if (activeGame == null || activeFrameIndexForUpdate >= 12) return;
 
     final oldFrame = activeGame.frames[activeFrameIndexForUpdate];
 
@@ -371,41 +371,75 @@ class SessionController extends ChangeNotifier {
   }
 
   // Logic to determine the next input location (Frame/Shot)
+  // Frame 10: Strike=1 shot (enables 11), Non-strike=2 shots
+  // Frame 11: Strike=1 shot (enables 12), Non-strike=2 shots
+  // Frame 12: Only 1 shot max
   void _advanceFrameAndShot(Frame newFrame) {
     final frameNumber = newFrame.frameNumber;
     final shotCount = newFrame.shots.length;
     
-    // Logic for Frames 1 through 9 (index 0-8)
+    // Frames 1-9 (index 0-8): Normal logic - strike ends frame, non-strike needs 2 shots
     if (frameNumber < 10) {
       if (newFrame.isComplete) {
-        // Frame is complete (Strike on shot 1, or two shots taken)
         _activeFrameIndex++;
         _activeShotIndex = 1;
       } else {
-        // Not a strike on shot 1, move to shot 2 of the current frame
-        _activeShotIndex = 2; 
+        _activeShotIndex = 2;
       }
-    } 
-    // Logic for Frame 10 (index 9)
+    }
+    // Frame 10 (index 9)
     else if (frameNumber == 10) {
       if (shotCount == 1) {
-        // First shot taken. Needs at least a second shot.
-        _activeShotIndex = 2;
+        final firstShot = newFrame.shots.first;
+        if (firstShot.numOfPinsKnocked == 10) {
+          // Strike on shot 1 - frame 10 is done, move to frame 11
+          _activeFrameIndex++;
+          _activeShotIndex = 1;
+        } else {
+          // Not a strike, need shot 2
+          _activeShotIndex = 2;
+        }
       } else if (shotCount == 2) {
-        // Check if a bonus shot is earned (Strike or Spare)
+        // Two shots taken in frame 10
         final totalPins = newFrame.totalPinsDown;
         if (totalPins >= 10) {
-          // Strike or Spare, needs shot 3
-          _activeShotIndex = 3;
-        } else {
-          // Open frame (less than 10 pins in 2 shots), game is over
-          _activeFrameIndex = 10;
+          // Spare achieved, move to frame 11
+          _activeFrameIndex++;
           _activeShotIndex = 1;
         }
-      } else if (shotCount == 3) {
-        // Third shot complete, game is over
-        _activeFrameIndex = 10; 
-        _activeShotIndex = 1;
+        // GAME END: Open frame (less than 10 pins) - don't advance
+        // Frame page stays on frame 10, shot 2 (LAST SHOT SCENARIO #1)
+      }
+    }
+    // Frame 11 (index 10) - only exists if frame 10 was a strike
+    else if (frameNumber == 11) {
+      if (shotCount == 1) {
+        final firstShot = newFrame.shots.first;
+        if (firstShot.numOfPinsKnocked == 10) {
+          // Strike on shot 1 - frame 11 is done, move to frame 12
+          _activeFrameIndex++;
+          _activeShotIndex = 1;
+        } else {
+          // Not a strike, need shot 2
+          _activeShotIndex = 2;
+        }
+      } else if (shotCount == 2) {
+        // Two shots taken in frame 11
+        final totalPins = newFrame.totalPinsDown;
+        if (totalPins >= 10) {
+          // Spare achieved, move to frame 12
+          _activeFrameIndex++;
+          _activeShotIndex = 1;
+        }
+        // GAME END: Open frame (less than 10 pins) - don't advance
+        // Frame page stays on frame 11, shot 2 (LAST SHOT SCENARIO #2)
+      }
+    }
+    // Frame 12 (index 11) - only exists if frame 11 was a strike or spare
+    else if (frameNumber == 12) {
+      if (shotCount == 1) {
+        // GAME END: Frame 12 is the last possible shot
+        // Don't advance - keep showing frame 12, shot 1 (LAST SHOT SCENARIO #3)
       }
     }
     
@@ -579,11 +613,11 @@ class SessionController extends ChangeNotifier {
     activeGameIndex = (gameNumber - 1).clamp(0, 9);
     currentGameNumber = gameNumber;
     currentGameCount = gameCount.clamp(1, 10);
-    _activeFrameIndex = (frameNumber - 1).clamp(0, 9);
+    _activeFrameIndex = (frameNumber - 1).clamp(0, 11);
     _activeShotIndex = shotNumber.clamp(1, 3);
     
     // Calculate starting frame index
-    final startingFrameIdx = (frameNumber - 1).clamp(0, 9);
+    final startingFrameIdx = (frameNumber - 1).clamp(0, 11);
     
     // Create a fresh session with empty games
     final newGames = List.generate(currentGameCount, (gameIdx) {
@@ -600,7 +634,7 @@ class SessionController extends ChangeNotifier {
       // Set up each game based on gameStates array
       for (int gameIdx = 0; gameIdx < gameStates.length && gameIdx < currentGameCount; gameIdx++) {
         final gs = gameStates[gameIdx];
-        final frameIdx = (gs.frameNumber - 1).clamp(0, 9);
+        final frameIdx = (gs.frameNumber - 1).clamp(0, 11);
         final shotIdx = gs.shotNumber.clamp(1, 3);
         
         gameFrameIndex[gameIdx] = frameIdx;
@@ -629,7 +663,7 @@ class SessionController extends ChangeNotifier {
           // Check if previous shot was a strike
           if (readOnlyShot.numOfPinsKnocked == 10) {
             // Strike - move to next frame
-            gameFrameIndex[gameIdx] = (frameIdx + 1).clamp(0, 9);
+            gameFrameIndex[gameIdx] = (frameIdx + 1).clamp(0, 11);
             gameShotIndex[gameIdx] = 1;
           } else {
             // Not a strike - add read-only shot to current frame
@@ -677,7 +711,7 @@ class SessionController extends ChangeNotifier {
         );
         
         if (readOnlyShot.numOfPinsKnocked == 10) {
-          _activeFrameIndex = (_activeFrameIndex + 1).clamp(0, 9);
+          _activeFrameIndex = (_activeFrameIndex + 1).clamp(0, 11);
           _activeShotIndex = 1;
           gameFrameIndex[activeGameIndex] = _activeFrameIndex;
           gameShotIndex[activeGameIndex] = _activeShotIndex;

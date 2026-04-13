@@ -229,7 +229,18 @@ class _BowlingFrameState extends State<BowlingFrame> {
 		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
 		final frame = activeGame.frames[widget.frameIndex];
 
-		final maxShotSlots = (widget.frameIndex == 9) ? 3 : 2;
+		// Determine max shot slots based on frame number
+		int maxShotSlots;
+		if (widget.frameIndex == 9 || widget.frameIndex == 10) {
+			// Frames 10, 11: Strike = 1 shot max, Non-strike = 2 shots max
+			maxShotSlots = 2; // Will be limited by actual game logic
+		} else if (widget.frameIndex == 11) {
+			// Frame 12: Always 1 shot max
+			maxShotSlots = 1;
+		} else {
+			// Frames 1-9: 2 shots max (1 for strike, 2 otherwise)
+			maxShotSlots = 2;
+		}
 		int itemCount;
 		
 		if (widget.isInputActive) {
@@ -590,7 +601,8 @@ class _BowlingShotState extends State<BowlingShot> {
 						frameIdx < widget.frameIndex ||
 						(frameIdx == widget.frameIndex && shotIndexInFrame < widget.shotIndex);
 
-				if (isBeforeCurrentPosition) {
+				// Only include shots that match this shot's position (first or second shot)
+				if (isBeforeCurrentPosition && shotIndexInFrame == widget.shotIndex) {
 					matchingPriorShots.add(frame.shots[shotIdx]);
 				}
 			}

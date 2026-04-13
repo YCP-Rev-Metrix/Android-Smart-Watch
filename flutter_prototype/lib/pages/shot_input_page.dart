@@ -193,7 +193,13 @@ class _ShotInputPageState extends State<ShotInputPage> {
     if (widget.startInPost) {
       _selectedBoard = _resolveInitialImpactIndex(widget.initialImpact);
     } else {
-      _selectedBoard = _boardOptions.indexOf('Pocket');
+      // For first shot, default to Pocket
+      if (widget.frameShotIndex == 1) {
+        _selectedBoard = _boardOptions.indexOf('Pocket');
+      } else {
+        // For second shot, default to Tap
+        _selectedBoard = _boardOptions.indexOf('Tap');
+      }
     }
     _selectedLane = widget.initialLane;
     _selectedSpeed = widget.initialSpeed;
