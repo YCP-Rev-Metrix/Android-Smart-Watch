@@ -56,6 +56,10 @@ class MainActivity: FlutterActivity() {
                         bleGattManager.stopAdvertising()
                         result.success(null)
                     }
+                    "disconnectCurrentConnection" -> {
+                        bleGattManager.disconnectCurrentConnection()
+                        result.success(null)
+                    }
                     "sendNotification" -> {
                         val service = call.argument<String>("serviceUuid") ?: ""
                         val char = call.argument<String>("charUuid") ?: ""

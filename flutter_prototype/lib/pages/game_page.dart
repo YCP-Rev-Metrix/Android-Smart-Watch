@@ -231,7 +231,6 @@ class _BowlingGameState extends State<BowlingGame> {
         : null;
 
     // Use the game number and count from the session controller (from the account packet)
-    final String displayScore = currentGame?.totalScore.toString() ?? '---';
     final int gameNum = _sessionController.currentGameNumber;
     final int gameCountVal = _sessionController.currentGameCount;
     
@@ -260,14 +259,6 @@ class _BowlingGameState extends State<BowlingGame> {
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Score: $displayScore',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
                       ),
                     ),
                     const SizedBox(height: 24),

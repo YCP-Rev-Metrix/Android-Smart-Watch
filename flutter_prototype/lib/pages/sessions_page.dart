@@ -99,8 +99,7 @@ class _SessionsPageState extends State<SessionsPage> {
     final gameNum = (packet.gameNumber == null || packet.gameNumber == 0) ? 1 : packet.gameNumber!;
     final frameNum = (packet.frameNumber == null || packet.frameNumber == 0) ? 1 : packet.frameNumber!;
     final shotNum = (packet.shotNumber == null || packet.shotNumber == 0) ? 1 : packet.shotNumber!;
-    final gameCountVal = (packet.gameCount == null || packet.gameCount == 0) ? 1 : packet.gameCount!;
-    final gameScoreVal = packet.gameScore ?? 0;
+    final gameCountVal = packet.gameCount;
     
     // Convert previousPins bitmask to List<bool> (true = standing, false = knocked down)
     List<bool>? previousPinsStanding;
@@ -121,13 +120,15 @@ class _SessionsPageState extends State<SessionsPage> {
       balls: packet.balls,
       previousPinsStanding: previousPinsStanding,
       gameCount: gameCountVal,
-      gameScore: gameScoreVal,
+      gameStates: packet.gameStates.isNotEmpty ? packet.gameStates : null,
     );
     Get.to(() => const FrameShell());
   }
 
   void _startAnonymousSession() {
-    SessionController().initializeAnonymous();
+    final packet = Get.find<BLEManager>().lastAccountPacket.value;
+    final balls = packet?.balls ?? const [];
+    SessionController().initializeAnonymous(balls: balls);
     Get.to(() => const FrameShell());
   }
 }

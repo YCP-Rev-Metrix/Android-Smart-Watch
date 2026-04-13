@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +10,6 @@ import 'package:get/get.dart';
 import '../models/frame.dart';
 import '../models/shot.dart';
 import '../models/account_packet.dart';
-import '../utils/bowling_scorer.dart';
 import './ble_manager.dart'; 
 
 // ----------------------------------------------------------------------
@@ -24,13 +24,12 @@ class Game {
 
   Game({required this.gameNumber, required this.frames, this.incomingScore, this.startingFrameIndex = 0});
 
-  /// Calculate the total score based on frames and incoming score
-  int get totalScore => BowlingScorer.calculateGameScore(frames, incomingScore: incomingScore, startingFrameIndex: startingFrameIndex);
+
 
   static Game createEmpty(int gameNumber, {int? incomingScore, int startingFrameIndex = 0}) {
     return Game(
       gameNumber: gameNumber,
-      frames: List.generate(10, (i) => Frame(frameNumber: i + 1, lane: 1)),
+      frames: List.generate(12, (i) => Frame(frameNumber: i + 1, lane: 1)),
       incomingScore: incomingScore,
       startingFrameIndex: startingFrameIndex,
     );
@@ -84,12 +83,15 @@ class SessionController extends ChangeNotifier {
   int activeGameIndex = 0; // 0-based index into currentSession.games
   int currentGameNumber = 1; // Current game number from packet (1-based)
   int currentGameCount = 1; // Total number of games in this session
-  int currentGameScore = 0; // Current game's score from packet
 
   // _activeFrameIndex: 0-9 for the 10 main frames. Set to 10 for game over.
   int _activeFrameIndex = 0;
   // _activeShotIndex: 1, 2, or 3 (for the 10th frame)
   int _activeShotIndex = 1; 
+
+  // Per-game tracking: stores frame/shot index for each game
+  Map<int, int> gameFrameIndex = {}; // gameIndex -> frameIndex
+  Map<int, int> gameShotIndex = {}; // gameIndex -> shotIndex
 
   int get activeFrameIndex => _activeFrameIndex; 
   int get activeShotIndex => _activeShotIndex; 
@@ -252,6 +254,15 @@ class SessionController extends ChangeNotifier {
     currentGameCount = parsedGames.length; // Update game count to match new session
     _activeFrameIndex = 0;
     _activeShotIndex = 1;
+    
+    // Initialize per-game tracking
+    gameFrameIndex.clear();
+    gameShotIndex.clear();
+    for (int gameIdx = 0; gameIdx < currentGameCount; gameIdx++) {
+      gameFrameIndex[gameIdx] = 0;
+      gameShotIndex[gameIdx] = 1;
+    }
+    
     notifyListeners(); 
   }
 
@@ -274,8 +285,8 @@ class SessionController extends ChangeNotifier {
     // Use the stored active index
     final activeFrameIndexForUpdate = _activeFrameIndex;
 
-    // Check for game over state
-    if (activeGame == null || activeFrameIndexForUpdate >= 10) return;
+    // Check for game over state (frames 0-11 are valid, so allow up to index 11)
+    if (activeGame == null || activeFrameIndexForUpdate >= 12) return;
 
     final oldFrame = activeGame.frames[activeFrameIndexForUpdate];
 
@@ -336,11 +347,10 @@ class SessionController extends ChangeNotifier {
       
       if (activeGame == null) return;
       
-      // Encode shot to binary packet with game score
+      // Encode shot to binary packet
       final packet = shot.encodeToBinary(
         sessionId: activeSessionId,
         gameNumber: gameNumber,
-        gameScore: activeGame.totalScore,
         shotIndexInFrame: shotIndexInFrame,
       );
 
@@ -361,43 +371,81 @@ class SessionController extends ChangeNotifier {
   }
 
   // Logic to determine the next input location (Frame/Shot)
+  // Frame 10: Strike=1 shot (enables 11), Non-strike=2 shots
+  // Frame 11: Strike=1 shot (enables 12), Non-strike=2 shots
+  // Frame 12: Only 1 shot max
   void _advanceFrameAndShot(Frame newFrame) {
     final frameNumber = newFrame.frameNumber;
     final shotCount = newFrame.shots.length;
     
-    // Logic for Frames 1 through 9 (index 0-8)
+    // Frames 1-9 (index 0-8): Normal logic - strike ends frame, non-strike needs 2 shots
     if (frameNumber < 10) {
       if (newFrame.isComplete) {
-        // Frame is complete (Strike on shot 1, or two shots taken)
         _activeFrameIndex++;
         _activeShotIndex = 1;
       } else {
-        // Not a strike on shot 1, move to shot 2 of the current frame
-        _activeShotIndex = 2; 
-      }
-    } 
-    // Logic for Frame 10 (index 9)
-    else if (frameNumber == 10) {
-      if (shotCount == 1) {
-        // First shot taken. Needs at least a second shot.
         _activeShotIndex = 2;
-      } else if (shotCount == 2) {
-        // Check if a bonus shot is earned (Strike or Spare)
-        final totalPins = newFrame.totalPinsDown;
-        if (totalPins >= 10) {
-          // Strike or Spare, needs shot 3
-          _activeShotIndex = 3;
-        } else {
-          // Open frame (less than 10 pins in 2 shots), game is over
-          _activeFrameIndex = 10;
-          _activeShotIndex = 1;
-        }
-      } else if (shotCount == 3) {
-        // Third shot complete, game is over
-        _activeFrameIndex = 10; 
-        _activeShotIndex = 1;
       }
     }
+    // Frame 10 (index 9)
+    else if (frameNumber == 10) {
+      if (shotCount == 1) {
+        final firstShot = newFrame.shots.first;
+        if (firstShot.numOfPinsKnocked == 10) {
+          // Strike on shot 1 - frame 10 is done, move to frame 11
+          _activeFrameIndex++;
+          _activeShotIndex = 1;
+        } else {
+          // Not a strike, need shot 2
+          _activeShotIndex = 2;
+        }
+      } else if (shotCount == 2) {
+        // Two shots taken in frame 10
+        final totalPins = newFrame.totalPinsDown;
+        if (totalPins >= 10) {
+          // Spare achieved, move to frame 11
+          _activeFrameIndex++;
+          _activeShotIndex = 1;
+        }
+        // GAME END: Open frame (less than 10 pins) - don't advance
+        // Frame page stays on frame 10, shot 2 (LAST SHOT SCENARIO #1)
+      }
+    }
+    // Frame 11 (index 10) - only exists if frame 10 was a strike
+    else if (frameNumber == 11) {
+      if (shotCount == 1) {
+        final firstShot = newFrame.shots.first;
+        if (firstShot.numOfPinsKnocked == 10) {
+          // Strike on shot 1 - frame 11 is done, move to frame 12
+          _activeFrameIndex++;
+          _activeShotIndex = 1;
+        } else {
+          // Not a strike, need shot 2
+          _activeShotIndex = 2;
+        }
+      } else if (shotCount == 2) {
+        // Two shots taken in frame 11
+        final totalPins = newFrame.totalPinsDown;
+        if (totalPins >= 10) {
+          // Spare achieved, move to frame 12
+          _activeFrameIndex++;
+          _activeShotIndex = 1;
+        }
+        // GAME END: Open frame (less than 10 pins) - don't advance
+        // Frame page stays on frame 11, shot 2 (LAST SHOT SCENARIO #2)
+      }
+    }
+    // Frame 12 (index 11) - only exists if frame 11 was a strike or spare
+    else if (frameNumber == 12) {
+      if (shotCount == 1) {
+        // GAME END: Frame 12 is the last possible shot
+        // Don't advance - keep showing frame 12, shot 1 (LAST SHOT SCENARIO #3)
+      }
+    }
+    
+    // Save the updated frame/shot to per-game tracking
+    gameFrameIndex[activeGameIndex] = _activeFrameIndex;
+    gameShotIndex[activeGameIndex] = _activeShotIndex;
   }
   
   /// Edits an existing shot in a frame by replacing the Shot object at a specific index.
@@ -465,7 +513,6 @@ class SessionController extends ChangeNotifier {
             'sessionId': currentSession?.sessionId ?? '',
             'games': currentSession!.games.map((g) => {
                   'gameNumber': g.gameNumber,
-                  'totalScore': g.totalScore,
                   'frames': g.frames.map((f) => f.toJson()).toList(),
                 }).toList(),
           };
@@ -534,8 +581,20 @@ class SessionController extends ChangeNotifier {
   }
 
   void setActiveGame(int gameIndex) {
+    // Save current game's frame/shot state before switching
+    gameFrameIndex[activeGameIndex] = _activeFrameIndex;
+    gameShotIndex[activeGameIndex] = _activeShotIndex;
+    
+    // Switch to new game
     activeGameIndex = gameIndex;
     currentGameNumber = gameIndex + 1; // Convert 0-based index to 1-based game number
+    
+    // Restore the new game's frame/shot state (or use defaults for new games)
+    _activeFrameIndex = gameFrameIndex[gameIndex] ?? 0;
+    _activeShotIndex = gameShotIndex[gameIndex] ?? 1;
+    
+    print('WATCH: Switched to game $gameIndex -> Shot $_activeShotIndex, gameShotIndex[$gameIndex] = ${gameShotIndex[gameIndex]}');
+    
     notifyListeners();
   }
 
@@ -547,64 +606,142 @@ class SessionController extends ChangeNotifier {
     required List<Ball> balls,
     List<bool>? previousPinsStanding,
     int gameCount = 1,
-    int gameScore = 0,
+    List<GameState>? gameStates, // New: per-game state data
   }) {
     activeSessionId = sessionId;
     activeBalls = balls;
     activeGameIndex = (gameNumber - 1).clamp(0, 9);
     currentGameNumber = gameNumber;
     currentGameCount = gameCount.clamp(1, 10);
-    currentGameScore = gameScore;
-    _activeFrameIndex = (frameNumber - 1).clamp(0, 9);
-    _activeShotIndex = shotNumber.clamp(1, 3); // shotNumber: 1-based (1=shot1, 2=shot2)
+    _activeFrameIndex = (frameNumber - 1).clamp(0, 11);
+    _activeShotIndex = shotNumber.clamp(1, 3);
     
-    // Calculate starting frame index: frames on the phone don't need to be calculated locally
-    final startingFrameIdx = (frameNumber - 1).clamp(0, 9); // Skip frames before the current one
+    // Calculate starting frame index
+    final startingFrameIdx = (frameNumber - 1).clamp(0, 11);
     
     // Create a fresh session with empty games
     final newGames = List.generate(currentGameCount, (gameIdx) {
-      final score = (gameIdx == activeGameIndex) ? gameScore : 0;
       final frameIdx = (gameIdx == activeGameIndex) ? startingFrameIdx : 0;
-      return Game.createEmpty(gameIdx + 1, incomingScore: score, startingFrameIndex: frameIdx);
+      return Game.createEmpty(gameIdx + 1, incomingScore: 0, startingFrameIndex: frameIdx);
     });
     
-    // If shot 2 or higher, create read-only shot 1 with previous pins on the active frame
-    if (shotNumber >= 2 && previousPinsStanding != null) {
-      final activeGame = newGames[activeGameIndex];
-      final currentFrame = activeGame.frames[_activeFrameIndex];
+    // Initialize per-game tracking for all games
+    gameFrameIndex.clear();
+    gameShotIndex.clear();
+    
+    // If gameStates provided, use per-game data; otherwise use backward compatibility
+    if (gameStates != null && gameStates.isNotEmpty) {
+      // Set up each game based on gameStates array
+      for (int gameIdx = 0; gameIdx < gameStates.length && gameIdx < currentGameCount; gameIdx++) {
+        final gs = gameStates[gameIdx];
+        final frameIdx = (gs.frameNumber - 1).clamp(0, 11);
+        final shotIdx = gs.shotNumber.clamp(1, 3);
+        
+        gameFrameIndex[gameIdx] = frameIdx;
+        gameShotIndex[gameIdx] = shotIdx;
+        
+        // For ALL games on shot 2+, add read-only shot with previous pins
+        if (shotIdx >= 2 && gs.previousPins > 0) {
+          print('WATCH: Game ${gameIdx + 1} adding read-only shot (shotIdx=$shotIdx, previousPins=0x${gs.previousPins.toRadixString(16)})');
+          final activeGame = newGames[gameIdx];
+          final currentFrame = activeGame.frames[frameIdx];
+          
+          // Convert previousPins bitmask to List<bool>
+          final previousPinsStanding = List.filled(10, false);
+          for (int i = 0; i < 10; i++) {
+            if ((gs.previousPins & (1 << i)) != 0) {
+              previousPinsStanding[i] = true;
+            }
+          }
+          
+          final readOnlyShot = Shot.readOnlyDefault(
+            frameNum: gs.frameNumber,
+            lane: currentFrame.lane,
+            standingPins: previousPinsStanding,
+          );
+          
+          // Check if previous shot was a strike
+          if (readOnlyShot.numOfPinsKnocked == 10) {
+            // Strike - move to next frame
+            gameFrameIndex[gameIdx] = (frameIdx + 1).clamp(0, 11);
+            gameShotIndex[gameIdx] = 1;
+          } else {
+            // Not a strike - add read-only shot to current frame
+            final updatedFrame = Frame(
+              frameNumber: currentFrame.frameNumber,
+              lane: currentFrame.lane,
+              shots: [readOnlyShot],
+            );
+            final updatedGame = activeGame.copyWithFrame(
+              index: frameIdx,
+              newFrame: updatedFrame,
+            );
+            newGames[gameIdx] = updatedGame;
+          }
+        }
+      }
       
-      final readOnlyShot = Shot.readOnlyDefault(
-        frameNum: frameNumber,
-        lane: currentFrame.lane,
-        standingPins: previousPinsStanding,
-      );
+      // Update active game state to match active game index
+      _activeFrameIndex = gameFrameIndex[activeGameIndex] ?? 0;
+      _activeShotIndex = gameShotIndex[activeGameIndex] ?? 1;
       
-      // Create updated frame with the read-only shot
-      final updatedFrame = Frame(
-        frameNumber: currentFrame.frameNumber,
-        lane: currentFrame.lane,
-        shots: [readOnlyShot],
-      );
+      print('WATCH: After gameStates - gameShotIndex map: $gameShotIndex');
+      print('WATCH: Active game $activeGameIndex set to Shot $_activeShotIndex');
+    } else {
+      // Backward compatibility: old single-game initialization
+      for (int gameIdx = 0; gameIdx < currentGameCount; gameIdx++) {
+        if (gameIdx == activeGameIndex) {
+          gameFrameIndex[gameIdx] = _activeFrameIndex;
+          gameShotIndex[gameIdx] = _activeShotIndex;
+        } else {
+          gameFrameIndex[gameIdx] = 0;
+          gameShotIndex[gameIdx] = 1;
+        }
+      }
       
-      // Update the game with the new frame
-      final updatedGame = activeGame.copyWithFrame(
-        index: _activeFrameIndex,
-        newFrame: updatedFrame,
-      );
-      newGames[activeGameIndex] = updatedGame;
+      // Handle read-only shot for active game
+      if (shotNumber >= 2 && previousPinsStanding != null) {
+        final activeGame = newGames[activeGameIndex];
+        final currentFrame = activeGame.frames[_activeFrameIndex];
+        
+        final readOnlyShot = Shot.readOnlyDefault(
+          frameNum: frameNumber,
+          lane: currentFrame.lane,
+          standingPins: previousPinsStanding,
+        );
+        
+        if (readOnlyShot.numOfPinsKnocked == 10) {
+          _activeFrameIndex = (_activeFrameIndex + 1).clamp(0, 11);
+          _activeShotIndex = 1;
+          gameFrameIndex[activeGameIndex] = _activeFrameIndex;
+          gameShotIndex[activeGameIndex] = _activeShotIndex;
+        } else {
+          final updatedFrame = Frame(
+            frameNumber: currentFrame.frameNumber,
+            lane: currentFrame.lane,
+            shots: [readOnlyShot],
+          );
+          final updatedGame = activeGame.copyWithFrame(
+            index: _activeFrameIndex,
+            newFrame: updatedFrame,
+          );
+          newGames[activeGameIndex] = updatedGame;
+        }
+      }
     }
     
     currentSession = SessionModel(games: newGames);
-    
     notifyListeners();
   }
 
-  void initializeAnonymous() {
-    // Use a high reserved session ID (0xFFFFFFFF) so phone knows this is an anonymous/test session
-    // Phone can recognize this and handle appropriately (not associated with any stored session)
-    activeSessionId = 0xFFFFFFFF;
-    activeBalls = const [];
+  void initializeAnonymous({List<Ball> balls = const []}) {
+    // Anonymous session: same as a normal session, but with a random session ID
+    // above 100,000 so the phone knows it wasn't pre-created. Still has access to user's balls and info.
+    activeSessionId = Random().nextInt(0xFFFFFFFF - 100000) + 100000;
+    activeBalls = balls;
     activeGameIndex = 0;
+    currentGameNumber = 1;
+    currentGameCount = 1;
     _activeFrameIndex = 0;
     _activeShotIndex = 1;
     
@@ -613,6 +750,12 @@ class SessionController extends ChangeNotifier {
       Game.createEmpty(1, incomingScore: 0),
     ];
     currentSession = SessionModel(games: newGames);
+    
+    // Initialize per-game tracking
+    gameFrameIndex.clear();
+    gameShotIndex.clear();
+    gameFrameIndex[0] = 0;
+    gameShotIndex[0] = 1;
     
     notifyListeners();
   }

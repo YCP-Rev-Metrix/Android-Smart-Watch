@@ -14,15 +14,45 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final ble = Get.find<BLEManager>();
+  late final SessionController sessionController;
 
   @override
   void initState() {
     super.initState();
-    // Listen for BLE connection
+    sessionController = SessionController();
+    
+    // Check if already connected
+    if (ble.isConnected.value) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Get.to(() => const SessionsPage());
+      });
+    }
+    
+    // Listen for BLE connection changes
     ever(ble.isConnected, (isConnected) {
-      if (isConnected) {
+      if (isConnected && mounted) {
         // Navigate to Sessions page on successful connection
         Get.to(() => const SessionsPage());
+      }
+    });
+    
+    // Listen for account packet reception
+    ever(ble.lastAccountPacket, (packet) {
+      if (packet != null && mounted) {
+        print('HomePage: Received account packet, initializing session');
+        sessionController.initializeFromPacket(
+          sessionId: packet.sessionId,
+          gameNumber: packet.gameNumber ?? 1,
+          frameNumber: packet.frameNumber ?? 1,
+          shotNumber: packet.shotNumber ?? 1,
+          balls: packet.balls,
+          gameCount: packet.gameCount,
+          gameStates: packet.gameStates,
+        );
+        // Navigate to Sessions page only if not syncing
+        if (!ble.isSyncing.value) {
+          Get.to(() => const SessionsPage());
+        }
       }
     });
   }

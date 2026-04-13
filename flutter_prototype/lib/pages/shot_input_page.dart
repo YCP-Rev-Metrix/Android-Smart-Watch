@@ -61,7 +61,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
   late List<bool> _selectedPins;
   String? _selectedOutcome;
   bool _isRecording = false;
-  Timer? _recordingTimer;
+  // Timer? _recordingTimer;
   double _selectedStance = 20.0;
   int _selectedLane = 1;
   double _sliderPos = 20;
@@ -81,8 +81,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
     'Speed',
   ];
 
-  final List<String> _boardOptions = [
-    'Gutter',
+  final List<String> _firstShotBoardOptions = [
     'Left',
     'Brooklyn',
     'Nose',
@@ -93,6 +92,19 @@ class _ShotInputPageState extends State<ShotInputPage> {
     'Light',
     'Right',
   ];
+
+  final List<String> _secondShotBoardOptions = [
+    'Right',
+    'Left',
+    'Chop',
+    'Tap',
+    'Gutter',
+    'Foul',
+  ];
+
+  List<String> get _boardOptions => widget.frameShotIndex == 1
+      ? _firstShotBoardOptions
+      : _secondShotBoardOptions;
 
   final List<double> _speedOptions = List.generate(
     101,
@@ -112,7 +124,13 @@ class _ShotInputPageState extends State<ShotInputPage> {
     double nearestDelta = double.infinity;
 
     for (int i = 0; i < _boardOptions.length; i++) {
-      final optionBoard = Shot.impactToBoard(_boardOptions[i]).toDouble();
+      final double optionBoard;
+      if (widget.frameShotIndex == 1) {
+        optionBoard = Shot.impactToBoard(_boardOptions[i]).toDouble();
+      } else {
+        optionBoard = Shot.secondShotImpactToBoard(_boardOptions[i]).toDouble();
+      }
+      
       final delta = (optionBoard - boardValue).abs();
       if (delta < nearestDelta) {
         nearestDelta = delta;
@@ -120,6 +138,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
       }
     }
 
+    if (_boardOptions.isEmpty) return '';
     return titleCase(_boardOptions[nearestIndex]);
   }
 
@@ -163,10 +182,24 @@ class _ShotInputPageState extends State<ShotInputPage> {
     
     // Initialize from widget parameters
     _selectedBall = widget.initialBall;
+    
+    // Ensure selected ball exists in the available balls list; fallback to first ball if not found
+    if (widget.balls != null && widget.balls!.isNotEmpty) {
+      final ballExists = widget.balls!.any((b) => b.id == _selectedBall);
+      if (!ballExists) {
+        _selectedBall = widget.balls!.first.id;
+      }
+    }
     if (widget.startInPost) {
       _selectedBoard = _resolveInitialImpactIndex(widget.initialImpact);
     } else {
-      _selectedBoard = _boardOptions.indexOf('Pocket');
+      // For first shot, default to Pocket
+      if (widget.frameShotIndex == 1) {
+        _selectedBoard = _boardOptions.indexOf('Pocket');
+      } else {
+        // For second shot, default to Tap
+        _selectedBoard = _boardOptions.indexOf('Tap');
+      }
     }
     _selectedLane = widget.initialLane;
     _selectedSpeed = widget.initialSpeed;
@@ -581,10 +614,9 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
            _selectedOutcome = 'F';
            isFoul = true;
          } else if (s == 'Gutter') {
-           // Gutter: no pins were knocked down; clear outcome selection
-           _selectedOutcome = null;
+           // Gutter: no pins were knocked down; outcome is '-'
+           _selectedOutcome = '-';
            isFoul = false;
-           _selectedBoard = _boardOptions.indexOf('Gutter');
          }
        });
      },
@@ -612,9 +644,9 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
       setState(() => _isRecording = true);
       await Get.find<BLEManager>().sendRecordingCommand("startRec");
       // Auto-stop after 30 seconds
-      _recordingTimer = Timer(const Duration(seconds: 30), () {
-        _stopRecording();
-      });
+      //_recordingTimer = Timer(const Duration(seconds: 30), () {
+      //  _stopRecording();
+      //});
     }
   }
 
@@ -723,14 +755,14 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     _pageController.dispose();
     _speedScrollController.removeListener(_onSpeedScroll);
     _speedScrollController.dispose();
-    _recordingTimer?.cancel();
+    // _recordingTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _stopRecording() async {
     if (_isRecording) {
-      _recordingTimer?.cancel();
-      _recordingTimer = null;
+      // _recordingTimer?.cancel();
+      // _recordingTimer = null;
       await Get.find<BLEManager>().sendRecordingCommand("stopRec");
       setState(() => _isRecording = false);
     }
@@ -751,20 +783,53 @@ Widget _buildStanceSlider({double scale = 1.0}) {
   }
 
   int _resolveInitialImpactIndex(double boardValue) {
+    if (boardValue == 0) return 0; // If impact is 0
     final mappedIdx = _boardOptions.indexWhere(
-      (impact) => Shot.impactToBoard(impact).toDouble() == boardValue,
+      (impact) {
+        if (widget.frameShotIndex == 1) {
+          return Shot.impactToBoard(impact).toDouble() == boardValue;
+        } else {
+          return Shot.secondShotImpactToBoard(impact).toDouble() == boardValue;
+        }
+      }
     );
     if (mappedIdx != -1) {
       return mappedIdx;
     }
 
-    return _boardOptions.indexOf('Pocket');
+    final fallback = _boardOptions.indexOf('Pocket');
+    return fallback != -1 ? fallback : 0;
   }
 
   void _submit() {
     final pinsDownCount = _calculatePinsDown();
-    final selectedImpact = _boardOptions[_selectedBoard];
-    final impactBoard = Shot.impactToBoard(selectedImpact).toDouble();
+    
+    double impactBoard = 0.0;
+    if (_selectedOutcome == '/' || _selectedOutcome == 'F' || _selectedOutcome == '-') {
+      // Impact is 0 when spare, foul, or gutter/miss
+      if (_selectedOutcome == '/' && widget.frameShotIndex == 2) {
+        // Spare on shot 2: use value 7
+        impactBoard = 7.0;
+      } else if (_selectedOutcome == 'F' && widget.frameShotIndex == 2) {
+        // Foul on shot 2: use value 6
+        impactBoard = 6.0;
+      } else if (_selectedOutcome == '-' && widget.frameShotIndex == 2) {
+        // Gutter on shot 2: use value 5
+        impactBoard = 5.0;
+      } else {
+        // Shot 1 or default: impact 0
+        impactBoard = 0.0;
+      }
+    } else {
+      if (_boardOptions.isNotEmpty && _selectedBoard < _boardOptions.length) {
+        final selectedImpact = _boardOptions[_selectedBoard];
+        if (widget.frameShotIndex == 1) {
+          impactBoard = Shot.impactToBoard(selectedImpact).toDouble();
+        } else {
+          impactBoard = Shot.secondShotImpactToBoard(selectedImpact).toDouble();
+        }
+      }
+    }
 
     // Build the Shot model from all collected input data
     final shot = Shot(
@@ -807,6 +872,8 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     });
   }
 
+  bool get _shouldSkipImpactPage => _selectedOutcome == '/' || _selectedOutcome == 'F' || _selectedOutcome == '-';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -814,9 +881,15 @@ Widget _buildStanceSlider({double scale = 1.0}) {
       body: PageView.builder(
         controller: _pageController,
         onPageChanged: _onPageChanged,
-        itemCount: 7,
+        itemCount: _shouldSkipImpactPage ? 6 : 7,
         itemBuilder: (context, index) {
-          if (index == 1) {
+          // If we are skipping the impact page, shift index 6 to 5
+          int effectiveIndex = index;
+          if (_shouldSkipImpactPage && index == 5) {
+            effectiveIndex = 6;
+          }
+
+          if (effectiveIndex == 1) {
             // Ball selector page
             final effectiveBalls = (widget.balls != null && widget.balls!.isNotEmpty)
                 ? widget.balls!
@@ -829,7 +902,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 Padding(
                   padding: const EdgeInsets.only(top: 30, bottom: 10),
                   child: Text(
-                    _titles[index],
+                    _titles[effectiveIndex],
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -847,10 +920,10 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                           child: _buildVerticalListPicker(
                             items: effectiveBalls.map((b) => b.name).toList(),
                             selectedIndex: safeSelectedIndex,
-                            onSelectionChanged: (index) {
-                              setState(() => _selectedBall = effectiveBalls[index].id);
+                            onSelectionChanged: (i) {
+                              setState(() => _selectedBall = effectiveBalls[i].id);
                             },
-                            labelFormatter: (index) => effectiveBalls[index].name,
+                            labelFormatter: (i) => effectiveBalls[i].name,
                           ),
                         ),
                       ],
@@ -859,7 +932,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 ),
               ],
             );
-          } else if (index == 2) {
+          } else if (effectiveIndex == 2) {
             // Stance page with stance/target/breakpoint and lane
             Widget boardRow(String label, double value, VoidCallback onTap) {
               final displayVal = value % 1 == 0
@@ -914,7 +987,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 Padding(
                   padding: const EdgeInsets.only(top: 10, bottom: 16),
                   child: Text(
-                    _titles[index],
+                    _titles[effectiveIndex],
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -1017,14 +1090,14 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 ),
               ],
             );
-          } else if (index == 4) {
+          } else if (effectiveIndex == 4) {
             // Shot screen with pins and outcome
             return Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.only(top: 12, bottom: 4),
                   child: Text(
-                    _titles[index],
+                    _titles[effectiveIndex],
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -1051,14 +1124,14 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 ),
               ],
             );
-          } else if (index == 5) {
+          } else if (effectiveIndex == 5) {
             // Impact selector page
             return Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.only(top: 30, bottom: 10),
                   child: Text(
-                    _titles[index],
+                    _titles[effectiveIndex],
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -1076,10 +1149,10 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                           child: _buildVerticalListPicker(
                             items: _boardOptions,
                             selectedIndex: _selectedBoard,
-                            onSelectionChanged: (index) {
-                              setState(() => _selectedBoard = index);
+                            onSelectionChanged: (i) {
+                              setState(() => _selectedBoard = i);
                             },
-                            labelFormatter: (index) => _boardOptions[index],
+                            labelFormatter: (i) => _boardOptions[i],
                             itemHeight: 60,
                           ),
                         ),
@@ -1089,14 +1162,14 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 ),
               ],
             );
-          } else if (index == 6) {
+          } else if (effectiveIndex == 6) {
             // Speed selector page with dual vertical pickers
             return Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.only(top: 30, bottom: 10),
                   child: Text(
-                    _titles[index],
+                    _titles[effectiveIndex],
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -1127,14 +1200,14 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 ),
               ],
             );
-          } else if (index == 3) {
+          } else if (effectiveIndex == 3) {
             // Record page with record button
             return Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.only(top: 12, bottom: 5),
                   child: Text(
-                    _titles[index],
+                    _titles[effectiveIndex],
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -1153,14 +1226,14 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 ),
               ],
             );
-          } else if (index == 0) {
+          } else if (effectiveIndex == 0) {
             // Recent Results page - info only
             return Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.only(top: 15, bottom: 10),
                   child: Text(
-                    _titles[index],
+                    _titles[effectiveIndex],
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -1229,7 +1302,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                 Padding(
                   padding: const EdgeInsets.only(top: 30, bottom: 10),
                   child: Text(
-                    _titles[index],
+                    _titles[effectiveIndex],
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,

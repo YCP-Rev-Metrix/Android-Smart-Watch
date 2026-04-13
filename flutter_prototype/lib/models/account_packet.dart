@@ -1,3 +1,17 @@
+class GameState {
+  final int frameNumber;
+  final int gameNumber;
+  final int shotNumber;
+  final int previousPins;
+
+  GameState({
+    required this.frameNumber,
+    required this.gameNumber,
+    required this.shotNumber,
+    required this.previousPins,
+  });
+}
+
 class AccountPacket {
   final int packetType; // 0x01
   final int version1;
@@ -7,15 +21,11 @@ class AccountPacket {
   // Session data
   final int sessionId;
   final String eventName;
-  final int? frameNumber;
-  final int? gameNumber;
-  final int? shotNumber;
   final int primaryHand; // 0=Left, 1=Right
 
-  // Game data
-  final int? gameCount;
-  final int? previousPins; // 11-bit bitmask (10 pins + foul bit)
-  final int? gameScore;
+  // Game data - now an array of per-game states
+  final int gameCount;
+  final List<GameState> gameStates; // Array of frame/shot for each game
 
   // Ball data
   final List<Ball> balls;
@@ -31,17 +41,19 @@ class AccountPacket {
     required this.packetLength,
     required this.sessionId,
     required this.eventName,
-    this.frameNumber,
-    this.gameNumber,
-    this.shotNumber,
     required this.primaryHand,
-    this.gameCount,
-    this.previousPins,
-    this.gameScore,
+    required this.gameCount,
+    required this.gameStates,
     required this.balls,
     required this.username,
     required this.userId,
   });
+
+  // Convenience getters for single active game (backward compatibility)
+  int? get frameNumber => gameStates.isNotEmpty ? gameStates.first.frameNumber : null;
+  int? get gameNumber => gameStates.isNotEmpty ? gameStates.first.gameNumber : null;
+  int? get shotNumber => gameStates.isNotEmpty ? gameStates.first.shotNumber : null;
+  int? get previousPins => gameStates.isNotEmpty ? gameStates.first.previousPins : null;
 
   /// Parses a complete binary packet (all chunks reassembled)
   static AccountPacket fromBinary(List<int> data) {
@@ -95,35 +107,41 @@ class AccountPacket {
     if (idx >= data.length) throw ArgumentError('Packet too short for primary hand');
     final primaryHand = data[idx++];
 
-    // Frame Number: 4 bytes (uint32, little-endian) - 0 if no active games
-    if (idx + 4 > data.length) throw ArgumentError('Packet too short for frame number');
-    final frameNumber = data[idx] | (data[idx + 1] << 8) | (data[idx + 2] << 16) | (data[idx + 3] << 24);
-    idx += 4;
-
-    // Game Number: 2 bytes (uint16, little-endian) - 0 if no active games
-    if (idx + 2 > data.length) throw ArgumentError('Packet too short for game number');
-    final gameNumber = data[idx] | (data[idx + 1] << 8);
-    idx += 2;
-
-    // Shot Number: 2 bytes (uint16, little-endian) - 0 if no active games
-    if (idx + 2 > data.length) throw ArgumentError('Packet too short for shot number');
-    final shotNumber = data[idx] | (data[idx + 1] << 8);
-    idx += 2;
-
     // Game Count: 2 bytes (uint16, little-endian)
     if (idx + 2 > data.length) throw ArgumentError('Packet too short for game count');
     final gameCount = data[idx] | (data[idx + 1] << 8);
     idx += 2;
 
-    // Previous Pins: 2 bytes (uint16, little-endian) - 11-bit pin bitmask + foul bit
-    if (idx + 2 > data.length) throw ArgumentError('Packet too short for previous pins');
-    final previousPins = data[idx] | (data[idx + 1] << 8);
-    idx += 2;
+    // Parse Game Data Array (for each game, 10 bytes: 4 frame + 2 game# + 2 shot# + 2 pins)
+    final gameStates = <GameState>[];
+    for (int i = 0; i < gameCount; i++) {
+      // Frame Number: 4 bytes (uint32, little-endian)
+      if (idx + 4 > data.length) throw ArgumentError('Packet too short for game $i frame number');
+      final frameNumber = data[idx] | (data[idx + 1] << 8) | (data[idx + 2] << 16) | (data[idx + 3] << 24);
+      idx += 4;
 
-    // Game Score: 4 bytes (int32, little-endian)
-    if (idx + 4 > data.length) throw ArgumentError('Packet too short for game score');
-    final gameScore = data[idx] | (data[idx + 1] << 8) | (data[idx + 2] << 16) | (data[idx + 3] << 24);
-    idx += 4;
+      // Game Number: 2 bytes (uint16, little-endian)
+      if (idx + 2 > data.length) throw ArgumentError('Packet too short for game $i number');
+      final gameNumber = data[idx] | (data[idx + 1] << 8);
+      idx += 2;
+
+      // Shot Number: 2 bytes (uint16, little-endian)
+      if (idx + 2 > data.length) throw ArgumentError('Packet too short for game $i shot number');
+      final shotNumber = data[idx] | (data[idx + 1] << 8);
+      idx += 2;
+
+      // Previous Pins: 2 bytes (uint16, little-endian)
+      if (idx + 2 > data.length) throw ArgumentError('Packet too short for game $i previous pins');
+      final previousPins = data[idx] | (data[idx + 1] << 8);
+      idx += 2;
+
+      gameStates.add(GameState(
+        frameNumber: frameNumber,
+        gameNumber: gameNumber,
+        shotNumber: shotNumber,
+        previousPins: previousPins,
+      ));
+    }
 
     // Ball Count: 1 byte
     if (idx >= data.length) throw ArgumentError('Packet too short for ball count');
@@ -170,13 +188,9 @@ class AccountPacket {
       packetLength: packetLength,
       sessionId: sessionId,
       eventName: eventName,
-      frameNumber: frameNumber,
-      gameNumber: gameNumber,
-      shotNumber: shotNumber,
       primaryHand: primaryHand,
       gameCount: gameCount,
-      previousPins: previousPins,
-      gameScore: gameScore,
+      gameStates: gameStates,
       balls: balls,
       username: username,
       userId: userId,
@@ -189,13 +203,11 @@ class AccountPacket {
     version: $version1${version2 != null ? '.$version2' : ''},
     sessionId: $sessionId,
     eventName: $eventName,
-    frameNumber: $frameNumber,
-    gameNumber: $gameNumber,
-    shotNumber: $shotNumber,
     primaryHand: ${primaryHand == 0 ? 'Left' : 'Right'},
     gameCount: $gameCount,
-    previousPins: 0x${previousPins?.toRadixString(16) ?? 'null'},
-    gameScore: $gameScore,
+    gameStates: [
+      ${gameStates.map((gs) => 'Game ${gs.gameNumber}: frame=${gs.frameNumber}, shot=${gs.shotNumber}, previousPins=0x${gs.previousPins.toRadixString(16)}').join(',\n      ')}
+    ],
     username: $username,
     userId: $userId,
     balls: ${balls.map((b) => '${b.name}(id=${b.id})').join(', ')}

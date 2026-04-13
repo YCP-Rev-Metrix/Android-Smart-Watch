@@ -13,17 +13,33 @@ class Frame {
     this.shots = const [],
   });
 
-  /// Checks if the frame is logically complete (Strike, Spare, or two shots taken).
+  /// Checks if the frame is logically complete.
+  /// Frames 1-9: Strike on shot 1, OR 2 shots taken
+  /// Frame 10: Strike on shot 1 allows frame 11 (not complete yet), OR 2 shots taken
+  /// Frame 11: Strike on shot 1 allows frame 12 (not complete yet), OR 2 shots taken
+  /// Frame 12: Always complete after 1 shot
   bool get isComplete {
     if (shots.isEmpty) return false;
     
-    // Check for a Strike (10 pins down on first shot)
-    if (shots.first.numOfPinsKnocked == 10) return true; 
-
-    // Check for a Spare or Open Frame (two shots taken)
-    if (shots.length >= 2) return true;
-
-    // Additional logic for 10th frame bonuses would go here, but this covers 1-9.
+    // Frame 12: Only ever has 1 shot, so complete after that
+    if (frameNumber == 12) return shots.length == 1;
+    
+    // Frame 11: If strike, will enable frame 12 but not complete yet
+    if (frameNumber == 11) {
+      if (shots.first.numOfPinsKnocked == 10) return false; // Strike - frame 12 pending
+      return shots.length >= 2; // Non-strike needs 2 shots
+    }
+    
+    // Frame 10: If strike, will enable frame 11 but not complete yet
+    if (frameNumber == 10) {
+      if (shots.first.numOfPinsKnocked == 10) return false; // Strike - frame 11 pending
+      return shots.length >= 2; // Non-strike needs 2 shots
+    }
+    
+    // Frames 1-9:
+    if (shots.first.numOfPinsKnocked == 10) return true; // Strike
+    if (shots.length >= 2) return true; // Two shots taken
+    
     return false;
   }
   

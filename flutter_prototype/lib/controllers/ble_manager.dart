@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/account_packet.dart';
+import '../pages/home_page.dart';
 
 
 class BLEManager extends GetxController {
@@ -25,6 +26,7 @@ class BLEManager extends GetxController {
 
   // Account packet data
   Rxn<AccountPacket> lastAccountPacket = Rxn<AccountPacket>();
+  var isSyncing = false.obs;
 
   BLEManager() {
     // Register native callback handler early so we receive native events
@@ -211,6 +213,17 @@ class BLEManager extends GetxController {
     }
   }
 
+  Future<void> disconnectCurrentConnection() async {
+    try {
+      await _channel.invokeMethod('disconnectCurrentConnection');
+      isConnected.value = false;
+      connectedDeviceAddress.value = '';
+      update();
+    } catch (e) {
+      print('disconnectCurrentConnection error: $e');
+    }
+  }
+
   Future<void> sendJsonToPhone(Map<String, dynamic> jsonObj) async {
     try {
       final bytes = utf8.encode(json.encode(jsonObj));
@@ -317,6 +330,40 @@ class BLEManager extends GetxController {
     await sendRecordingCommand("stopRec");
   }
 
+  Future<void> sendSyncCommand() async {
+    await sendJsonToPhone({"cmd": "sync"});
+  }
+
+  Future<void> sendDisconnectCommand() async {
+    await sendJsonToPhone({"cmd": "disconn"});
+  }
+
+  Future<void> sendNextSessionCommand(int sessionId) async {
+    await sendJsonToPhone({"cmd": "nextSession", "sessionId": sessionId});
+  }
+
+  /// Handle disconnect from phone - logout and return to home
+  Future<void> _handlePhoneDisconnect() async {
+    try {
+      print('WATCH BLE Phone sent disconnect command - logging out');
+      
+      // Clear user data
+      lastAccountPacket.value = null;
+      lastReceivedCommand.value = null;
+      
+      // Disconnect BLE
+      await disconnectCurrentConnection();
+      
+      // Show notification
+      await _showLocalNotification('Disconnected', 'Logged out by mobile app');
+      
+      // Navigate back to home page (clears all routes like logout)
+      Get.offAll(() => const HomePage());
+    } catch (e) {
+      print('Error handling phone disconnect: $e');
+    }
+  }
+
   /// Try to parse the buffer as an account packet (type 0x01)
   Future<void> _tryParseAccountPacket() async {
     try {
@@ -397,15 +444,22 @@ class BLEManager extends GetxController {
       if (parsed is Map<String, dynamic>) {
         lastReceivedCommand.value = parsed;
 
+        // Handle disconnect command
+        if (parsed['cmd'] == 'disconn') {
+          print('WATCH BLE Received disconnect command from phone');
+          _handlePhoneDisconnect();
+        }
         // Handle userData command
-        if (parsed['cmd'] == 'userData') {
+        else if (parsed['cmd'] == 'userData') {
           print('WATCH BLE Username: ${parsed['username']}');
           print('WATCH BLE Hand: ${parsed['hand']}');
           print('WATCH BLE Sessions: ${parsed['sessions']}');
           print('WATCH BLE Balls: ${parsed['balls']}');
         }
 
-        _showLocalNotification('Command received', 'Received ${parsed['cmd']}');
+        if (parsed['cmd'] != 'disconn') {
+          _showLocalNotification('Command received', 'Received ${parsed['cmd']}');
+        }
       } else {
         lastReceivedCommand.value = {'value': parsed};
       }
