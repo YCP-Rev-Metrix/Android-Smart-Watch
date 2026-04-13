@@ -60,12 +60,12 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+      backgroundColor: const Color.fromRGBO(18, 26, 36, 1),
       appBar: AppBar(
         title: const Text('Home', style: TextStyle(fontSize: 14)),
         toolbarHeight: 40,
         centerTitle: true,
-        backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+        backgroundColor: const Color.fromRGBO(18, 26, 36, 1),
       ),
       body: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -116,7 +116,7 @@ class _HomePageState extends State<HomePage> {
                 },
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.zero,
-                  backgroundColor: const Color.fromRGBO(142, 124, 195, 1),
+                  backgroundColor: const Color.fromRGBO(250, 136, 71, 1),
                 ),
                 child: const Text(
                   'Offline Mode',

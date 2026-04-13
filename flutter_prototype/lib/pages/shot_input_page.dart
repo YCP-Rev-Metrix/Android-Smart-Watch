@@ -420,13 +420,13 @@ class _ShotInputPageState extends State<ShotInputPage> {
                     minimumSize: const Size(60, 30),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     side: const BorderSide(
-                      color: Color.fromRGBO(152, 124, 229, 1),
+                      color: Color.fromRGBO(250, 136, 71, 1),
                       width: 2,
                     ),
                   ),
                   child: const Text(
                     'Apply',
-                    style: TextStyle(color: Color.fromRGBO(152, 124, 229, 1), fontSize: 12, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: Color.fromRGBO(250, 136, 71, 1), fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -584,7 +584,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
     final double w = 64 * scale;
     final double h = 44 * scale;
     final bool isSelected = _selectedOutcome == compact;
-    final Color bg = isSelected ? const Color.fromRGBO(80, 200, 120, 1) : const Color.fromRGBO(153, 153, 153, 1);
+    final Color bg = isSelected ? const Color.fromRGBO(80, 200, 120, 1) : const Color.fromRGBO(208, 220, 232, 1);
     final Color textColor = isSelected ? Colors.black : Colors.white;
 
     return GestureDetector(
@@ -601,7 +601,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
 
 Widget _buildFoulGutterButton({double scale = 1.0}) {
    return PopupMenuButton<String>(
-     color: const Color.fromRGBO(67, 67, 67, 1),
+     color: const Color.fromRGBO(18, 26, 36, 1),
      onSelected: (s) {
        setState(() {
          // Both Foul and Gutter mean no pins knocked down: all available pins stay standing
@@ -628,7 +628,7 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
        width: 64 * scale,
        height: 44 * scale,
        padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 4 * scale),
-       decoration: BoxDecoration(color: const Color.fromRGBO(153, 153, 153, 1), border: Border.all(color: Colors.black, width: 0.6 * scale)),
+       decoration: BoxDecoration(color: const Color.fromRGBO(208, 220, 232, 1), border: Border.all(color: Colors.black, width: 0.6 * scale)),
        alignment: Alignment.center,
        child: Text('-/F', style: TextStyle(color: Colors.white, fontSize: 14 * scale, fontWeight: FontWeight.w700)),
      ),
@@ -667,7 +667,7 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
 
   final Color btnBg = _isRecording
       ? Colors.redAccent
-      : const Color.fromRGBO(153, 153, 153, 1);
+      : const Color.fromRGBO(208, 220, 232, 1);
 
   return GestureDetector(
     onTap: handleTap,
@@ -877,7 +877,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+      backgroundColor: const Color.fromRGBO(18, 26, 36, 1),
       body: PageView.builder(
         controller: _pageController,
         onPageChanged: _onPageChanged,
@@ -1190,12 +1190,12 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       minimumSize: const Size(80, 30),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       side: const BorderSide(
-                        color: Color.fromRGBO(152, 124, 229, 1),
+                        color: Color.fromRGBO(250, 136, 71, 1),
                         width: 2,
                       ),
                     ),
                     onPressed: _submit,
-                    child: const Text('Submit', style: TextStyle(fontSize: 12, color: Color.fromRGBO(152, 124, 229, 1), fontWeight: FontWeight.w600)),
+                    child: const Text('Submit', style: TextStyle(fontSize: 12, color: Color.fromRGBO(250, 136, 71, 1), fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],

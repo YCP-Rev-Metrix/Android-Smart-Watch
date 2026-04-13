@@ -247,7 +247,7 @@ class _BowlingGameState extends State<BowlingGame> {
                 width: 280,
                 height: 280,
                 decoration: const BoxDecoration(
-                  color: Color.fromRGBO(67, 67, 67, 1),
+                  color: Color.fromRGBO(18, 26, 36, 1),
                   shape: BoxShape.circle,
                 ),
                 child: Column(
