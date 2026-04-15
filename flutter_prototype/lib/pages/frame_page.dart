@@ -233,7 +233,15 @@ class _BowlingFrameState extends State<BowlingFrame> {
 		int maxShotSlots;
 		if (widget.frameIndex == 9 || widget.frameIndex == 10) {
 			// Frames 10, 11: Strike = 1 shot max, Non-strike = 2 shots max
-			maxShotSlots = 2; // Will be limited by actual game logic
+			// Special case: Frame 11 with frame 10 spare = only 1 shot allowed
+			if (widget.frameIndex == 10) {
+				final frame10 = activeGame.frames[9];
+				final wasFrame10Strike = frame10.shots.isNotEmpty && frame10.shots.first.numOfPinsKnocked == 10;
+				final wasFrame10Spare = frame10.shots.length >= 2 && frame10.totalPinsDown >= 10 && !wasFrame10Strike;
+				maxShotSlots = wasFrame10Spare ? 1 : 2;
+			} else {
+				maxShotSlots = 2;
+			}
 		} else if (widget.frameIndex == 11) {
 			// Frame 12: Always 1 shot max
 			maxShotSlots = 1;

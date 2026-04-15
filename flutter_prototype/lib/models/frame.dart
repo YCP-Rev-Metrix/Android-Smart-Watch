@@ -15,24 +15,24 @@ class Frame {
 
   /// Checks if the frame is logically complete.
   /// Frames 1-9: Strike on shot 1, OR 2 shots taken
-  /// Frame 10: Strike on shot 1 allows frame 11 (not complete yet), OR 2 shots taken
-  /// Frame 11: Strike on shot 1 allows frame 12 (not complete yet), OR 2 shots taken
-  /// Frame 12: Always complete after 1 shot
+  /// Frame 10: Strike completes after 1 shot (enables frame 11), non-strike completes after 2 shots
+  /// Frame 11: Strike on shot 1 enables frame 12, non-strike completes after 2 shots
+  /// Frame 12: Always completes after 1 shot (only reached if strikes in both 10 and 11)
   bool get isComplete {
     if (shots.isEmpty) return false;
     
     // Frame 12: Only ever has 1 shot, so complete after that
     if (frameNumber == 12) return shots.length == 1;
     
-    // Frame 11: If strike, will enable frame 12 but not complete yet
+    // Frame 11: Strike on shot 1 completes frame 11, non-strike needs 2 shots
     if (frameNumber == 11) {
-      if (shots.first.numOfPinsKnocked == 10) return false; // Strike - frame 12 pending
+      if (shots.isNotEmpty && shots.first.numOfPinsKnocked == 10) return true; // Strike
       return shots.length >= 2; // Non-strike needs 2 shots
     }
     
-    // Frame 10: If strike, will enable frame 11 but not complete yet
+    // Frame 10: Strike completes after 1, non-strike after 2
     if (frameNumber == 10) {
-      if (shots.first.numOfPinsKnocked == 10) return false; // Strike - frame 11 pending
+      if (shots.first.numOfPinsKnocked == 10) return true; // Strike - complete after 1
       return shots.length >= 2; // Non-strike needs 2 shots
     }
     
