@@ -7,13 +7,15 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/account_packet.dart';
 import '../pages/home_page.dart';
-
+import 'packet_queue.dart';
 
 class BLEManager extends GetxController {
   var isAdvertising = false.obs;
   var gattReady = false.obs;
 
   static const _channel = MethodChannel('ble_service_channel');
+  final PacketQueue _packetQueue = PacketQueue.instance;
+  bool _isQueueProcessing = false;
 
   // Incoming command callback
   Rxn<Map<String, dynamic>> lastReceivedCommand = Rxn<Map<String, dynamic>>();
@@ -227,12 +229,8 @@ class BLEManager extends GetxController {
   Future<void> sendJsonToPhone(Map<String, dynamic> jsonObj) async {
     try {
       final bytes = utf8.encode(json.encode(jsonObj));
-      await _channel.invokeMethod('sendNotification', {
-        'serviceUuid': BleGattManagerConstants.serviceUuid,
-        'charUuid': BleGattManagerConstants.notifyUuid,
-        'bytes': bytes,
-      });
-      print('BLEManager.sendJsonToPhone -> sent');
+      _packetQueue.enqueue(bytes);
+      print('BLEManager.sendJsonToPhone -> queued');
     } catch (e) {
       print('sendJsonToPhone error: $e');
     }
@@ -276,12 +274,8 @@ class BLEManager extends GetxController {
   
   Future<void> sendRawBLEPacket(List<int> bytes) async {
     try {
-      await _channel.invokeMethod('sendNotification', {
-        'serviceUuid': BleGattManagerConstants.serviceUuid,
-        'charUuid': BleGattManagerConstants.notifyUuid,
-        'bytes': bytes,
-      });
-      print('BLEManager.sendRawBLEPacket -> sent ${bytes.length} bytes');
+      _packetQueue.enqueue(bytes);
+      print('BLEManager.sendRawBLEPacket -> queued ${bytes.length} bytes');
     } catch (e) {
       print('sendRawBLEPacket error: $e');
       rethrow;
@@ -294,7 +288,7 @@ class BLEManager extends GetxController {
       final jsonString = json.encode(jsonObj);
       final bytes = utf8.encode(jsonString);
       
-      print('BLEManager.sendJsonInChunks: Sending ${bytes.length} bytes in chunks');
+      print('BLEManager.sendJsonInChunks: Queueing ${bytes.length} bytes in chunks');
       
       const chunkSize = 20; 
       final totalChunks = (bytes.length + chunkSize - 1) ~/ chunkSize;
@@ -303,16 +297,11 @@ class BLEManager extends GetxController {
         final end = (i + chunkSize <= bytes.length) ? i + chunkSize : bytes.length;
         final chunk = bytes.sublist(i, end);
         
-        await sendRawBLEPacket(chunk);
-        print('BLEManager: Sent chunk ${(i ~/ chunkSize) + 1}/$totalChunks (${chunk.length} bytes)');
-        
-        // Delay between chunks so phone can process
-        if (i + chunkSize < bytes.length) {
-          await Future.delayed(const Duration(milliseconds: 50));
-        }
+        _packetQueue.enqueue(chunk);
+        print('BLEManager: Queued chunk ${(i ~/ chunkSize) + 1}/$totalChunks (${chunk.length} bytes)');
       }
       
-      print('BLEManager.sendJsonInChunks: Complete!');
+      print('BLEManager.sendJsonInChunks: Complete queueing!');
     } catch (e) {
       print('sendJsonInChunks error: $e');
       rethrow;

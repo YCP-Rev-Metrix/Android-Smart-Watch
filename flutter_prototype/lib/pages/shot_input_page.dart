@@ -850,9 +850,6 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     // ignore: avoid_print
     print('Shot submitted: ${shot.toJson()}');
 
-    // Add the shot to the FCFS packet queue
-    PacketQueue.instance.enqueue(shot);
-
     // Note: Shot packet is sent from session_controller.dart after the shot is recorded
     // with the updated game score (via _sendShotPacket)
 
