@@ -559,8 +559,8 @@ class _BowlingShotState extends State<BowlingShot> {
 			} else {
 				// Use controller-level defaults when this frame has no prior shots
 				pinsDown = List.filled(10, true);
-				// Auto-flip lane every frame: frame 1 = lane 1, frame 2 = lane 2, etc.
-				lane = (widget.frameIndex % 2 == 0) ? 1 : 2;
+				// Use the last selected lane (persisted in defaultLane)
+				lane = _sessionController.defaultLane;
 				board = _sessionController.defaultBoard;
 				speed = _sessionController.defaultSpeed;
 				ball = _sessionController.defaultBall;

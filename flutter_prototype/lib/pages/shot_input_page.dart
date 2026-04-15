@@ -527,8 +527,8 @@ class _ShotInputPageState extends State<ShotInputPage> {
    // Determine pin color:
    // - If not editable (knocked down in previous shot): dark grey
    // - If strike/spare selected: all pins appear knocked down (dark grey)
-   // - Shot 1: unselected = light slate grey, selected = purple
-   // - Shot 2: available pins start purple, selected (left standing) = red
+   // - Shot 1: unselected = light slate grey, selected = orange
+   // - Shot 2: available pins start orange, selected (left standing) = red
    Color pinColor;
    
    // If strike/spare/foul is selected, show knocked down appearance
@@ -536,20 +536,20 @@ class _ShotInputPageState extends State<ShotInputPage> {
      pinColor = !isEditable || !isSelected
          ? const Color.fromRGBO(100, 100, 100, 1) // dark grey - knocked down
          : (widget.frameShotIndex == 1 
-             ? const Color.fromRGBO(152, 124, 229, 1) // Shot 1: foul shows purple (standing)
+             ? const Color.fromRGBO(250, 136, 71, 1) // Shot 1: foul shows orange (standing)
              : const Color.fromARGB(255, 255, 0, 0)); // Shot 2: foul shows red (standing)
    } else if (!isEditable) {
      pinColor = const Color.fromRGBO(100, 100, 100, 1); // dark grey - knocked down previous shot
    } else if (widget.frameShotIndex == 1) {
      // Shot 1
      pinColor = isSelected 
-       ? const Color.fromRGBO(152, 124, 229, 1) // purple - selected as standing
+       ? const Color.fromRGBO(250, 136, 71, 1) // orange - selected as standing
        : const Color.fromRGBO(119, 136, 153, 1); // light slate grey - will be knocked down
    } else {
-     // Shot 2: inverted colors - knocked down pins are purple, standing pins are red
+     // Shot 2: inverted colors - knocked down pins are orange, standing pins are red
      pinColor = isSelected 
        ? const Color.fromARGB(255, 255, 0, 0) // red - left standing on shot 2
-       : const Color.fromRGBO(152, 124, 229, 1); // purple - knocked down on shot 2
+       : const Color.fromRGBO(250, 136, 71, 1); // orange - knocked down on shot 2
    }
 
    return GestureDetector(
@@ -874,6 +874,30 @@ Widget _buildStanceSlider({double scale = 1.0}) {
 
   bool get _shouldSkipImpactPage => _selectedOutcome == '/' || _selectedOutcome == 'F' || _selectedOutcome == '-';
 
+  /// Builds lane dropdown items based on the lanes count from AccountPacket
+  List<DropdownMenuItem<int>> _buildLaneDropdownItems() {
+    final bleManager = Get.find<BLEManager>();
+    final packet = bleManager.lastAccountPacket.value;
+    final laneCount = packet?.lanes ?? 2;
+    
+    return List.generate(
+      laneCount,
+      (index) {
+        final laneNumber = index + 1;
+        return DropdownMenuItem(
+          value: laneNumber,
+          child: Text(
+            laneNumber.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1057,24 +1081,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                             dropdownColor: const Color.fromRGBO(80, 80, 80, 1),
                             underline: const SizedBox(),
                             isDense: true,
-                            items: [
-                              DropdownMenuItem(
-                                value: 1,
-                                child: Text(
-                                  '1',
-                                  style: TextStyle(
-                                      color: Colors.white, fontSize: 12),
-                                ),
-                              ),
-                              DropdownMenuItem(
-                                value: 2,
-                                child: Text(
-                                  '2',
-                                  style: TextStyle(
-                                      color: Colors.white, fontSize: 12),
-                                ),
-                              ),
-                            ],
+                            items: _buildLaneDropdownItems(),
                             onChanged: (value) {
                               setState(() {
                                 _selectedLane = value ?? 1;
