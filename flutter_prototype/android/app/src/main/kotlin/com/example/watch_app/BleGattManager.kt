@@ -157,6 +157,12 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
                 )
             }
         }
+
+        override fun onNotificationSent(device: BluetoothDevice, status: Int) {
+            super.onNotificationSent(device, status)
+            Log.i(TAG, "Indication sent to ${device.address}, status=$status")
+            sendIndicationResult(status == BluetoothGatt.GATT_SUCCESS)
+        }
     }
 
     // --- Init GATT Server ---
@@ -177,7 +183,7 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
 
         val notifyChar = BluetoothGattCharacteristic(
             NOTIFY_UUID,
-            BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+            BluetoothGattCharacteristic.PROPERTY_INDICATE,
             BluetoothGattCharacteristic.PERMISSION_READ
         )
 
@@ -231,16 +237,49 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
     // --- Send notification to phone ---
     fun sendNotification(serviceUuid: String, charUuid: String, bytes: ByteArray) {
         try {
-            val svc = gattServer?.getService(UUID.fromString(serviceUuid)) ?: return
-            val ch = svc.getCharacteristic(UUID.fromString(charUuid)) ?: return
+            val svc = gattServer?.getService(UUID.fromString(serviceUuid)) ?: run {
+                sendIndicationResult(false, "Service not found")
+                return
+            }
+            val ch = svc.getCharacteristic(UUID.fromString(charUuid)) ?: run {
+                sendIndicationResult(false, "Characteristic not found")
+                return
+            }
             ch.value = bytes
 
+            if (connectedDevices.isEmpty()) {
+                sendIndicationResult(false, "No connected devices")
+                return
+            }
+
+            var anySent = false
             for (device in connectedDevices) {
-                gattServer?.notifyCharacteristicChanged(device, ch, false)
+                val sent = gattServer?.notifyCharacteristicChanged(device, ch, true) == true
+                if (sent) anySent = true
+            }
+
+            if (!anySent) {
+                sendIndicationResult(false, "Failed to initiate indication")
             }
 
         } catch (e: Exception) {
             Log.e(TAG, "sendNotification error: $e")
+            sendIndicationResult(false, e.message ?: "Unknown error")
+        }
+    }
+
+    private fun sendIndicationResult(success: Boolean, error: String? = null) {
+        mainHandler.post {
+            if (!MainActivity.isFlutterAttached) return@post
+            try {
+                val args = mapOf(
+                    "success" to success,
+                    "error" to error
+                )
+                channel.invokeMethod("onIndicationComplete", args)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to invoke Flutter method: ${e.message}")
+            }
         }
     }
 

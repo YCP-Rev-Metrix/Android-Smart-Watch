@@ -12,6 +12,18 @@ class PacketQueue {
 
   final Queue<List<int>> _queue = Queue<List<int>>();
   bool _isQueueProcessing = false;
+  Completer<bool>? _indicationCompleter;
+
+  // Called manually from BLEManager's _handleNativeCalls when 'onIndicationComplete' fires
+  void handleNativeIndicationComplete(MethodCall call) {
+    if (call.method == 'onIndicationComplete') {
+      final args = call.arguments as Map<dynamic, dynamic>?;
+      final success = args?['success'] as bool? ?? false;
+      if (_indicationCompleter != null && !_indicationCompleter!.isCompleted) {
+        _indicationCompleter!.complete(success);
+      }
+    }
+  }
 
   /// Adds a packet to the back of the queue (FCFS enqueue) and starts processing.
   void enqueue(List<int> packet) {
@@ -33,6 +45,8 @@ class PacketQueue {
         final packet = _queue.first;
 
         try {
+          _indicationCompleter = Completer<bool>();
+
           // Attempt to send via the original BLE service channel
           await _channel.invokeMethod('sendNotification', {
             'serviceUuid': BleGattManagerConstants.serviceUuid,
@@ -40,17 +54,28 @@ class PacketQueue {
             'bytes': packet,
           });
           
-          print('[PacketQueue] sent ${packet.length} bytes successfully');
+          // Wait for hardware ACK from Kotlin via onIndicationComplete
+          final ackReceived = await _indicationCompleter!.future;
           
-          // Confirmation successful, dequeue it
-          dequeue();
-          
-          // Small delay before next packet to avoid swamping BLE buffer
-          await Future.delayed(const Duration(milliseconds: 50));
+          if (ackReceived) {
+            print('[PacketQueue] sent ${packet.length} bytes successfully and ACKed');
+            
+            // Confirmation successful, dequeue it
+            dequeue();
+            
+            // Small delay before next packet to avoid swamping BLE buffer
+            await Future.delayed(const Duration(milliseconds: 50));
+          } else {
+            print('[PacketQueue] Send failed (no ACK) or errored natively');
+            // Wait before retrying the exact same packet
+            await Future.delayed(const Duration(milliseconds: 500));
+          }
         } catch (e) {
           print('[PacketQueue] send error: $e');
           // Send failed - wait before retrying the same packet
           await Future.delayed(const Duration(milliseconds: 500));
+        } finally {
+          _indicationCompleter = null;
         }
       }
     } finally {

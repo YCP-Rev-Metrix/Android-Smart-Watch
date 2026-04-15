@@ -31,6 +31,9 @@ class BLEManager extends GetxController {
 
   BLEManager() {
     // Register native callback handler early so we receive native events
+    // Important: PacketQueue acts on the exact same Channel string, but we only 
+    // want to handle non-indication ones here. Since MethodChannel.setMethodCallHandler
+    // handles all, we'll route indications back to the PacketQueue instance.
     _channel.setMethodCallHandler(_handleNativeCalls);
     _initLocalNotifications();
   }
@@ -100,6 +103,10 @@ class BLEManager extends GetxController {
   Future<dynamic> _handleNativeCalls(MethodCall call) async {
     try {
       switch (call.method) {
+        case 'onIndicationComplete':
+          // Route this explicitly to the PacketQueue which is waiting on its Completer.
+          _packetQueue.handleNativeIndicationComplete(call);
+          break;
         case 'onCharacteristicWrite':
           final args = call.arguments as Map<dynamic, dynamic>;
           final value = args['value'];
