@@ -15,7 +15,6 @@ class BLEManager extends GetxController {
 
   static const _channel = MethodChannel('ble_service_channel');
   final PacketQueue _packetQueue = PacketQueue.instance;
-  bool _isQueueProcessing = false;
 
   // Incoming command callback
   Rxn<Map<String, dynamic>> lastReceivedCommand = Rxn<Map<String, dynamic>>();
