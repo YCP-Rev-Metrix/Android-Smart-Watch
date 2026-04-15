@@ -217,6 +217,17 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
         advertiser?.stopAdvertising(advertiseCallback)
     }
 
+    fun disconnectCurrentConnection() {
+        try {
+            for (device in connectedDevices) {
+                gattServer?.cancelConnection(device)
+            }
+            Log.i(TAG, "Disconnected all connected devices")
+        } catch (e: Exception) {
+            Log.e(TAG, "disconnectCurrentConnection error: $e")
+        }
+    }
+
     // --- Send notification to phone ---
     fun sendNotification(serviceUuid: String, charUuid: String, bytes: ByteArray) {
         try {

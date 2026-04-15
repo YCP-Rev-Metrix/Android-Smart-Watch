@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/ble_manager.dart';
 import '../controllers/session_controller.dart';
+import 'sessions_page.dart';
 
 class DevSettingsPage extends StatefulWidget {
   const DevSettingsPage({super.key});
@@ -13,14 +14,15 @@ class DevSettingsPage extends StatefulWidget {
 class _DevSettingsPageState extends State<DevSettingsPage> {
   final ble = Get.find<BLEManager>();
   bool isSyncing = false;
+  bool isEnding = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+      backgroundColor: const Color.fromRGBO(18, 26, 36, 1),
       appBar: AppBar(
         title: const Text('Settings', style: TextStyle(fontSize: 14)),
-        backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+        backgroundColor: const Color.fromRGBO(18, 26, 36, 1),
         toolbarHeight: 40,
         centerTitle: true,
       ),
@@ -42,7 +44,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                       style: TextStyle(
                         fontSize: 11,
                         color: connected
-                            ? const Color.fromRGBO(142, 124, 195, 1)
+                            ? const Color.fromRGBO(250, 136, 71, 1)
                             : Colors.white70,
                         fontWeight: FontWeight.bold,
                       ),
@@ -61,44 +63,6 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
 
               const SizedBox(height: 8),
 
-              // Start/Stop Advertising Button
-              Center(
-                child: SizedBox(
-                  width: 150,
-                  height: 28,
-                  child: Obx(() {
-                    return ElevatedButton(
-                      onPressed: () async {
-                        if (!ble.gattReady.value) {
-                          await ble.initGattServer();
-                        }
-                        if (!ble.isAdvertising.value) {
-                          await ble.startAdvertising();
-                        } else {
-                          await ble.stopAdvertising();
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        backgroundColor: ble.isAdvertising.value
-                            ? const Color.fromRGBO(153, 153, 153, 1)
-                            : const Color.fromRGBO(142, 124, 195, 1),
-                      ),
-                      child: Text(
-                        ble.isAdvertising.value ? "Stop Adv" : "Start Adv",
-                        style: const TextStyle(
-                          fontSize: 9,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-              ),
-
-              const SizedBox(height: 6),
-
               // Sync Session Button
               Center(
                 child: SizedBox(
@@ -112,33 +76,16 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                               isSyncing = true;
                             });
                             try {
-                              final sessionController = SessionController();
-                              
-                              // Listen for the next packet arrival
-                              final subscription = ble.lastAccountPacket.listen((packet) {
-                                if (packet != null) {
-                                  print('WATCH: Sync received new AccountPacket, updating session');
-                                  sessionController.initializeFromPacket(
-                                    sessionId: packet.sessionId,
-                                    gameNumber: packet.gameNumber ?? 1,
-                                    frameNumber: packet.frameNumber ?? 1,
-                                    shotNumber: packet.shotNumber ?? 1,
-                                    balls: packet.balls,
-                                    gameCount: packet.gameCount,
-                                    gameStates: packet.gameStates,
-                                  );
-                                }
-                              });
-                              
+                              ble.isSyncing.value = true;
                               await ble.sendSyncCommand();
                               print('WATCH: Sync command sent to phone');
                               
-                              // Wait for response with timeout
+                              // Wait for packet arrival
                               await Future.delayed(const Duration(seconds: 3));
-                              subscription.cancel();
                             } catch (e) {
                               print('WATCH: Failed to send sync: $e');
                             } finally {
+                              ble.isSyncing.value = false;
                               if (mounted) {
                                 setState(() {
                                   isSyncing = false;
@@ -150,10 +97,68 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                       padding: EdgeInsets.zero,
                       backgroundColor: isSyncing
                           ? const Color.fromRGBO(100, 100, 100, 1)
-                          : const Color.fromRGBO(142, 124, 195, 1),
+                          : const Color.fromRGBO(250, 136, 71, 1),
                     ),
                     child: Text(
                       isSyncing ? "Syncing..." : "Sync",
+                      style: const TextStyle(
+                        fontSize: 9,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 6),
+
+              // End Session Button
+              Center(
+                child: SizedBox(
+                  width: 150,
+                  height: 28,
+                  child: ElevatedButton(
+                    onPressed: isEnding
+                        ? null
+                        : () async {
+                            setState(() {
+                              isEnding = true;
+                            });
+                            try {
+                              final sessionId = ble.lastAccountPacket.value?.sessionId;
+                              if (sessionId == null) {
+                                print('WATCH: No session ID available');
+                                return;
+                              }
+                              
+                              await ble.sendNextSessionCommand(sessionId);
+                              print('WATCH: Next session command sent with sessionId: $sessionId');
+                              
+                              // Navigate to sessions page
+                              if (mounted) {
+                                Navigator.of(context).pushReplacement(
+                                  MaterialPageRoute(builder: (context) => const SessionsPage()),
+                                );
+                              }
+                            } catch (e) {
+                              print('WATCH: Failed to end session: $e');
+                            } finally {
+                              if (mounted) {
+                                setState(() {
+                                  isEnding = false;
+                                });
+                              }
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      backgroundColor: isEnding
+                          ? const Color.fromRGBO(100, 100, 100, 1)
+                          : const Color.fromRGBO(250, 136, 71, 1),
+                    ),
+                    child: Text(
+                      isEnding ? "Ending..." : "End",
                       style: const TextStyle(
                         fontSize: 9,
                         color: Colors.white,
@@ -172,9 +177,25 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                   width: 150,
                   height: 28,
                   child: ElevatedButton(
-                    onPressed: () {
-                      // Handle logout
-                      Get.snackbar('Logout', 'User logged out');
+                    onPressed: () async {
+                      // Send disconnect command to phone
+                      if (ble.isConnected.value) {
+                        await ble.sendDisconnectCommand();
+                        // Give the phone a moment to receive the command
+                        await Future.delayed(const Duration(milliseconds: 500));
+                      }
+                      
+                      // Disconnect the current connection
+                      await ble.disconnectCurrentConnection();
+                      
+                      // Clear the session
+                      final sessionController = SessionController();
+                      sessionController.currentSession = null;
+                      
+                      // Return to home page
+                      if (mounted) {
+                        Navigator.of(context).popUntil((route) => route.isFirst);
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       padding: EdgeInsets.zero,

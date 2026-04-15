@@ -35,9 +35,9 @@ class _FrameShellState extends State<FrameShell> {
 
 
 	final List<Color> frameColorPalette = const [
-		Color.fromRGBO(67, 67, 67, 1),
-		Color.fromRGBO(67, 67, 67, 1),
-		Color.fromRGBO(67, 67, 67, 1),
+		Color.fromRGBO(18, 26, 36, 1),
+		Color.fromRGBO(18, 26, 36, 1),
+		Color.fromRGBO(18, 26, 36, 1),
 	];
 	
 	int get _currentActiveFrameIndex => _sessionController.activeFrameIndex;
@@ -229,7 +229,18 @@ class _BowlingFrameState extends State<BowlingFrame> {
 		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
 		final frame = activeGame.frames[widget.frameIndex];
 
-		final maxShotSlots = (widget.frameIndex == 9) ? 3 : 2;
+		// Determine max shot slots based on frame number
+		int maxShotSlots;
+		if (widget.frameIndex == 9 || widget.frameIndex == 10) {
+			// Frames 10, 11: Strike = 1 shot max, Non-strike = 2 shots max
+			maxShotSlots = 2; // Will be limited by actual game logic
+		} else if (widget.frameIndex == 11) {
+			// Frame 12: Always 1 shot max
+			maxShotSlots = 1;
+		} else {
+			// Frames 1-9: 2 shots max (1 for strike, 2 otherwise)
+			maxShotSlots = 2;
+		}
 		int itemCount;
 		
 		if (widget.isInputActive) {
@@ -467,6 +478,27 @@ class _BowlingShotState extends State<BowlingShot> {
 	double breakPoint = 20.0;
 	bool _showEmptyInfoBarValues = false;
 	List<bool> pinsDown = List.filled(10, false);
+	Map<int, String> ballAbbreviations = {};
+
+	/// Generate a 2-character abbreviation from a ball name
+	String _generateBallAbbreviation(String name) {
+		if (name.isEmpty) return '';
+		if (name.length == 1) return name.toUpperCase();
+		// Take first letter + first consonant, or first two letters if no consonants
+		final firstLetter = name[0].toUpperCase();
+		const vowels = 'AEIOUaeiou';
+		String? secondChar;
+		// Find first consonant after the first character
+		for (int i = 1; i < name.length; i++) {
+			if (!vowels.contains(name[i])) {
+				secondChar = name[i].toUpperCase();
+				break;
+			}
+		}
+		// If no consonant found, use second character
+		secondChar ??= name[1].toUpperCase();
+		return firstLetter + secondChar;
+	}
 	@override
 	void didChangeDependencies() {
 		super.didChangeDependencies();
@@ -486,7 +518,13 @@ class _BowlingShotState extends State<BowlingShot> {
 	void _updateShotDisplay() {
 		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
 		final frame = activeGame.frames[widget.frameIndex];
-		final previousMatchingShot = _findPreviousSameLaneShot(activeGame, frame.lane, widget.shotIndex);
+	
+		// Build ball abbreviations map if not already done
+		if (ballAbbreviations.isEmpty) {
+			for (final ball in _sessionController.activeBalls) {
+				ballAbbreviations[ball.id] = _generateBallAbbreviation(ball.name);
+			}
+		}
 	
 		// Determine which shot data to display (if any)
 		final shotToDisplay = frame.shots.length >= widget.shotIndex
@@ -505,22 +543,24 @@ class _BowlingShotState extends State<BowlingShot> {
 				target = shotToDisplay.target;
 				breakPoint = shotToDisplay.breakPoint;
 			} else {
-			// Shot hasn't been submitted yet.
-			if (previousMatchingShot != null) {
-				pinsDown = previousMatchingShot.pinsState.map((isStanding) => !isStanding).toList();
-				lane = previousMatchingShot.lane;
-				board = previousMatchingShot.impact;
-				speed = previousMatchingShot.speed;
-				ball = previousMatchingShot.ball;
-				stance = previousMatchingShot.stance;
-				target = previousMatchingShot.target;
-				breakPoint = previousMatchingShot.breakPoint;
-				_showEmptyInfoBarValues = false;
+			// Shot hasn't been submitted yet - show pins from previous shot but empty info bar values
+			if (frame.shots.isNotEmpty) {
+				final lastShot = frame.shots.last;
+				// For shot 2 before submission, show pins from shot 1 (convert standing to knocked down format)
+				pinsDown = lastShot.pinsState.map((isStanding) => !isStanding).toList();
+				lane = frame.lane;
+				board = lastShot.impact;
+				speed = lastShot.speed;
+				ball = lastShot.ball;
+				stance = lastShot.stance;
+				target = lastShot.target;
+				breakPoint = lastShot.breakPoint;
+				_showEmptyInfoBarValues = true;
 			} else {
 				// Use controller-level defaults when this frame has no prior shots
 				pinsDown = List.filled(10, true);
-				// Auto-flip lane every frame: frame 1 = lane 1, frame 2 = lane 2, etc.
-				lane = (widget.frameIndex % 2 == 0) ? 1 : 2;
+				// Use the last selected lane (persisted in defaultLane)
+				lane = _sessionController.defaultLane;
 				board = _sessionController.defaultBoard;
 				speed = _sessionController.defaultSpeed;
 				ball = _sessionController.defaultBall;
@@ -533,15 +573,6 @@ class _BowlingShotState extends State<BowlingShot> {
 		});
 	}
 
-	Shot? _findPreviousSameLaneShot(dynamic activeGame, int lane, int shotIndex) {
-		for (int frameIdx = widget.frameIndex - 1; frameIdx >= 0; frameIdx--) {
-			final candidateFrame = activeGame.frames[frameIdx];
-			if (candidateFrame.lane == lane && candidateFrame.shots.length >= shotIndex) {
-				return candidateFrame.shots[shotIndex - 1];
-			}
-		}
-		return null;
-	}
 
 	void _openShotPage() async {
 		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
@@ -570,7 +601,8 @@ class _BowlingShotState extends State<BowlingShot> {
 						frameIdx < widget.frameIndex ||
 						(frameIdx == widget.frameIndex && shotIndexInFrame < widget.shotIndex);
 
-				if (isBeforeCurrentPosition) {
+				// Only include shots that match this shot's position (first or second shot)
+				if (isBeforeCurrentPosition && shotIndexInFrame == widget.shotIndex) {
 					matchingPriorShots.add(frame.shots[shotIdx]);
 				}
 			}
@@ -706,7 +738,7 @@ class _BowlingShotState extends State<BowlingShot> {
 			// Shot 1 colors OR shot 2 before submission: dark grey for knocked down, purple for standing
 			pinColor = isDown 
 				? const Color.fromRGBO(100, 100, 100, 1) // dark grey - knocked down
-				: const Color.fromRGBO(142, 124, 195, 1); // purple - standing
+				: const Color.fromRGBO(250, 136, 71, 1); // orange - standing
 		} else {
 			// Shot 2 after submission: show perspective colors (purple for available, red for standing)
 			final currentShot = frame.shots.length >= shotIndex ? frame.shots[shotIndex - 1] : null;
@@ -722,7 +754,7 @@ class _BowlingShotState extends State<BowlingShot> {
 					// No previous shot, treat as shot 1
 					pinColor = isDown 
 						? const Color.fromRGBO(100, 100, 100, 1)
-						: const Color.fromRGBO(142, 124, 195, 1);
+						: const Color.fromRGBO(250, 136, 71, 1);
 				} else {
 					final wasAvailable = previousShot.pinsState[index]; // true = was standing after shot 1
 					if (!wasAvailable) {
@@ -730,7 +762,7 @@ class _BowlingShotState extends State<BowlingShot> {
 						pinColor = const Color.fromRGBO(100, 100, 100, 1);
 					} else if (isDown) {
 						// Pin was available but got knocked down in shot 2: purple
-						pinColor = const Color.fromRGBO(142, 124, 195, 1);
+						pinColor = const Color.fromRGBO(250, 136, 71, 1);
 					} else {
 						// Pin is still standing after shot 2: red
 						pinColor = const Color.fromARGB(255, 255, 0, 0);
@@ -752,8 +784,9 @@ class _BowlingShotState extends State<BowlingShot> {
 	}
 
 
-	Widget _buildInfoBar(double stance, double board, double speed, int ball, {bool showEmptyValues = false}) {
+	Widget _buildInfoBar(double stance, double board, double speed, int ball, {bool showEmptyValues = false, bool isFoul = false, bool isSpare = false}) {
 		const impactAbbreviations = <int, String>{
+			// First shot impacts
 			0: 'GUT',
 			11: 'R',
 			13: 'L',
@@ -764,15 +797,35 @@ class _BowlingShotState extends State<BowlingShot> {
 			21: 'H',
 			23: 'BR',
 			27: 'LF',
+			// Second shot impacts
+			1: 'R',
+			2: 'L',
+			3: 'CH',
+			4: 'T',
+			5: 'GUT',
+			6: 'F',
+			7: 'SP',
 		};
 		final roundedImpact = board.round();
 		final bool isWholeImpact = (board - roundedImpact).abs() < 0.001;
 		final boardDisplay = isWholeImpact
 			? (impactAbbreviations[roundedImpact] ?? roundedImpact.toString())
 			: board.toStringAsFixed(1);
-		final ballDisplay = showEmptyValues ? '' : ball.toString();
+		
+		// Handle special outcomes: show 'F' for foul, 'S' for spare, or use abbreviations
+		final impactDisplay;
+		if (showEmptyValues) {
+			impactDisplay = '';
+		} else if (isFoul) {
+			impactDisplay = 'FL';
+		} else if (isSpare) {
+			impactDisplay = 'SP';
+		} else {
+			impactDisplay = boardDisplay;
+		}
+		
+		final ballDisplay = showEmptyValues ? '' : (ballAbbreviations[ball] ?? ball.toString());
 		final stanceDisplay = showEmptyValues ? '' : stance.toStringAsFixed(1);
-		final impactDisplay = showEmptyValues ? '' : boardDisplay;
 		final speedDisplay = showEmptyValues ? '' : speed.toStringAsFixed(1);
 		return SizedBox(
 			height: 110,
@@ -872,6 +925,9 @@ class _BowlingShotState extends State<BowlingShot> {
 			? frame.shots[widget.shotIndex - 1]
 			: null;
 		final isReadOnly = shotToDisplay?.isReadOnly ?? false;
+		
+		// Determine if this is a special outcome (spare, foul, or gutter)
+
 
 		return Scaffold(
 			backgroundColor: widget.color,
@@ -902,22 +958,23 @@ class _BowlingShotState extends State<BowlingShot> {
 												fontWeight: FontWeight.bold,
 											),
 										),
-										const SizedBox(height: 8),
+										const SizedBox(height: 7),
 										_buildPinDisplay(pinsDown),
-										const SizedBox(height: 4),
 									],
 								),
 							),
 							Expanded(
 								child: Center(
 									child: Transform.scale(
-										scale: 0.72,
+										scale: 0.85,
 										child: _buildInfoBar(
 											stance,
 											board,
 											speed,
 											ball,
 											showEmptyValues: _showEmptyInfoBarValues,
+											isFoul: shotToDisplay?.isFoul ?? false,
+											isSpare: !_showEmptyInfoBarValues && shotToDisplay != null && shotToDisplay.impact == 7,
 										),
 									),
 								),

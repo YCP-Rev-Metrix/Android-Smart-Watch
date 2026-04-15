@@ -16,12 +16,12 @@ class _SessionsPageState extends State<SessionsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+      backgroundColor: const Color.fromRGBO(18, 26, 36, 1),
       appBar: AppBar(
         title: const Text('Sessions', style: TextStyle(fontSize: 14)),
         toolbarHeight: 40,
         centerTitle: true,
-        backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+        backgroundColor: const Color.fromRGBO(18, 26, 36, 1),
       ),
       body: SafeArea(
         child: Padding(
@@ -32,13 +32,23 @@ class _SessionsPageState extends State<SessionsPage> {
               // Welcome message - dynamic username from BLE
               Obx(() {
                 final username = Get.find<BLEManager>().lastAccountPacket.value?.username ?? 'Guest';
-                return Text(
-                  'Welcome $username',
+                return RichText(
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    children: [
+                      const TextSpan(
+                        text: 'Welcome ',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      TextSpan(
+                        text: username,
+                        style: const TextStyle(color: Color.fromRGBO(250, 136, 71, 1)),
+                      ),
+                    ],
                   ),
                 );
               }),
@@ -80,7 +90,7 @@ class _SessionsPageState extends State<SessionsPage> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           padding: EdgeInsets.zero,
-          backgroundColor: const Color.fromRGBO(153, 153, 153, 1),
+          backgroundColor: const Color.fromRGBO(53, 80, 112, 1),
         ),
         onPressed: onPressed,
         child: Text(

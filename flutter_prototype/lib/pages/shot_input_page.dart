@@ -193,7 +193,13 @@ class _ShotInputPageState extends State<ShotInputPage> {
     if (widget.startInPost) {
       _selectedBoard = _resolveInitialImpactIndex(widget.initialImpact);
     } else {
-      _selectedBoard = _boardOptions.indexOf('Pocket');
+      // For first shot, default to Pocket
+      if (widget.frameShotIndex == 1) {
+        _selectedBoard = _boardOptions.indexOf('Pocket');
+      } else {
+        // For second shot, default to Tap
+        _selectedBoard = _boardOptions.indexOf('Tap');
+      }
     }
     _selectedLane = widget.initialLane;
     _selectedSpeed = widget.initialSpeed;
@@ -414,13 +420,13 @@ class _ShotInputPageState extends State<ShotInputPage> {
                     minimumSize: const Size(60, 30),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     side: const BorderSide(
-                      color: Color.fromRGBO(152, 124, 229, 1),
+                      color: Color.fromRGBO(250, 136, 71, 1),
                       width: 2,
                     ),
                   ),
                   child: const Text(
                     'Apply',
-                    style: TextStyle(color: Color.fromRGBO(152, 124, 229, 1), fontSize: 12, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: Color.fromRGBO(250, 136, 71, 1), fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -521,8 +527,8 @@ class _ShotInputPageState extends State<ShotInputPage> {
    // Determine pin color:
    // - If not editable (knocked down in previous shot): dark grey
    // - If strike/spare selected: all pins appear knocked down (dark grey)
-   // - Shot 1: unselected = light slate grey, selected = purple
-   // - Shot 2: available pins start purple, selected (left standing) = red
+   // - Shot 1: unselected = light slate grey, selected = orange
+   // - Shot 2: available pins start orange, selected (left standing) = red
    Color pinColor;
    
    // If strike/spare/foul is selected, show knocked down appearance
@@ -530,20 +536,20 @@ class _ShotInputPageState extends State<ShotInputPage> {
      pinColor = !isEditable || !isSelected
          ? const Color.fromRGBO(100, 100, 100, 1) // dark grey - knocked down
          : (widget.frameShotIndex == 1 
-             ? const Color.fromRGBO(152, 124, 229, 1) // Shot 1: foul shows purple (standing)
+             ? const Color.fromRGBO(250, 136, 71, 1) // Shot 1: foul shows orange (standing)
              : const Color.fromARGB(255, 255, 0, 0)); // Shot 2: foul shows red (standing)
    } else if (!isEditable) {
      pinColor = const Color.fromRGBO(100, 100, 100, 1); // dark grey - knocked down previous shot
    } else if (widget.frameShotIndex == 1) {
      // Shot 1
      pinColor = isSelected 
-       ? const Color.fromRGBO(152, 124, 229, 1) // purple - selected as standing
+       ? const Color.fromRGBO(250, 136, 71, 1) // orange - selected as standing
        : const Color.fromRGBO(119, 136, 153, 1); // light slate grey - will be knocked down
    } else {
-     // Shot 2: inverted colors - knocked down pins are purple, standing pins are red
+     // Shot 2: inverted colors - knocked down pins are orange, standing pins are red
      pinColor = isSelected 
        ? const Color.fromARGB(255, 255, 0, 0) // red - left standing on shot 2
-       : const Color.fromRGBO(152, 124, 229, 1); // purple - knocked down on shot 2
+       : const Color.fromRGBO(250, 136, 71, 1); // orange - knocked down on shot 2
    }
 
    return GestureDetector(
@@ -578,7 +584,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
     final double w = 64 * scale;
     final double h = 44 * scale;
     final bool isSelected = _selectedOutcome == compact;
-    final Color bg = isSelected ? const Color.fromRGBO(80, 200, 120, 1) : const Color.fromRGBO(153, 153, 153, 1);
+    final Color bg = isSelected ? const Color.fromRGBO(80, 200, 120, 1) : const Color.fromRGBO(208, 220, 232, 1);
     final Color textColor = isSelected ? Colors.black : Colors.white;
 
     return GestureDetector(
@@ -595,7 +601,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
 
 Widget _buildFoulGutterButton({double scale = 1.0}) {
    return PopupMenuButton<String>(
-     color: const Color.fromRGBO(67, 67, 67, 1),
+     color: const Color.fromRGBO(18, 26, 36, 1),
      onSelected: (s) {
        setState(() {
          // Both Foul and Gutter mean no pins knocked down: all available pins stay standing
@@ -622,7 +628,7 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
        width: 64 * scale,
        height: 44 * scale,
        padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 4 * scale),
-       decoration: BoxDecoration(color: const Color.fromRGBO(153, 153, 153, 1), border: Border.all(color: Colors.black, width: 0.6 * scale)),
+       decoration: BoxDecoration(color: const Color.fromRGBO(208, 220, 232, 1), border: Border.all(color: Colors.black, width: 0.6 * scale)),
        alignment: Alignment.center,
        child: Text('-/F', style: TextStyle(color: Colors.white, fontSize: 14 * scale, fontWeight: FontWeight.w700)),
      ),
@@ -661,7 +667,7 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
 
   final Color btnBg = _isRecording
       ? Colors.redAccent
-      : const Color.fromRGBO(153, 153, 153, 1);
+      : const Color.fromRGBO(208, 220, 232, 1);
 
   return GestureDetector(
     onTap: handleTap,
@@ -801,7 +807,19 @@ Widget _buildStanceSlider({double scale = 1.0}) {
     double impactBoard = 0.0;
     if (_selectedOutcome == '/' || _selectedOutcome == 'F' || _selectedOutcome == '-') {
       // Impact is 0 when spare, foul, or gutter/miss
-      impactBoard = 0.0;
+      if (_selectedOutcome == '/' && widget.frameShotIndex == 2) {
+        // Spare on shot 2: use value 7
+        impactBoard = 7.0;
+      } else if (_selectedOutcome == 'F' && widget.frameShotIndex == 2) {
+        // Foul on shot 2: use value 6
+        impactBoard = 6.0;
+      } else if (_selectedOutcome == '-' && widget.frameShotIndex == 2) {
+        // Gutter on shot 2: use value 5
+        impactBoard = 5.0;
+      } else {
+        // Shot 1 or default: impact 0
+        impactBoard = 0.0;
+      }
     } else {
       if (_boardOptions.isNotEmpty && _selectedBoard < _boardOptions.length) {
         final selectedImpact = _boardOptions[_selectedBoard];
@@ -856,10 +874,34 @@ Widget _buildStanceSlider({double scale = 1.0}) {
 
   bool get _shouldSkipImpactPage => _selectedOutcome == '/' || _selectedOutcome == 'F' || _selectedOutcome == '-';
 
+  /// Builds lane dropdown items based on the lanes count from AccountPacket
+  List<DropdownMenuItem<int>> _buildLaneDropdownItems() {
+    final bleManager = Get.find<BLEManager>();
+    final packet = bleManager.lastAccountPacket.value;
+    final laneCount = packet?.lanes ?? 2;
+    
+    return List.generate(
+      laneCount,
+      (index) {
+        final laneNumber = index + 1;
+        return DropdownMenuItem(
+          value: laneNumber,
+          child: Text(
+            laneNumber.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+      backgroundColor: const Color.fromRGBO(18, 26, 36, 1),
       body: PageView.builder(
         controller: _pageController,
         onPageChanged: _onPageChanged,
@@ -1039,24 +1081,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                             dropdownColor: const Color.fromRGBO(80, 80, 80, 1),
                             underline: const SizedBox(),
                             isDense: true,
-                            items: [
-                              DropdownMenuItem(
-                                value: 1,
-                                child: Text(
-                                  '1',
-                                  style: TextStyle(
-                                      color: Colors.white, fontSize: 12),
-                                ),
-                              ),
-                              DropdownMenuItem(
-                                value: 2,
-                                child: Text(
-                                  '2',
-                                  style: TextStyle(
-                                      color: Colors.white, fontSize: 12),
-                                ),
-                              ),
-                            ],
+                            items: _buildLaneDropdownItems(),
                             onChanged: (value) {
                               setState(() {
                                 _selectedLane = value ?? 1;
@@ -1172,12 +1197,12 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       minimumSize: const Size(80, 30),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       side: const BorderSide(
-                        color: Color.fromRGBO(152, 124, 229, 1),
+                        color: Color.fromRGBO(250, 136, 71, 1),
                         width: 2,
                       ),
                     ),
                     onPressed: _submit,
-                    child: const Text('Submit', style: TextStyle(fontSize: 12, color: Color.fromRGBO(152, 124, 229, 1), fontWeight: FontWeight.w600)),
+                    child: const Text('Submit', style: TextStyle(fontSize: 12, color: Color.fromRGBO(250, 136, 71, 1), fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],

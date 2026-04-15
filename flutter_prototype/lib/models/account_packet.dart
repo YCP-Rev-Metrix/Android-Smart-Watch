@@ -33,6 +33,7 @@ class AccountPacket {
   // User data
   final String username;
   final int userId;
+  final int lanes; // Number of lanes available
 
   AccountPacket({
     required this.packetType,
@@ -47,6 +48,7 @@ class AccountPacket {
     required this.balls,
     required this.username,
     required this.userId,
+    this.lanes = 2,
   });
 
   // Convenience getters for single active game (backward compatibility)
@@ -180,6 +182,14 @@ class AccountPacket {
     // User ID: 4 bytes (uint32, little-endian)
     if (idx + 4 > data.length) throw ArgumentError('Packet too short for user ID');
     final userId = data[idx] | (data[idx + 1] << 8) | (data[idx + 2] << 16) | (data[idx + 3] << 24);
+    idx += 4;
+
+    // Lanes: 1 byte (number of lanes available)
+    int lanes = 2; // Default to 2 if not present
+    if (idx < data.length) {
+      lanes = data[idx++];
+      if (lanes == 0) lanes = 2; // Default to 2 if 0 is received
+    }
 
     return AccountPacket(
       packetType: packetType,
@@ -194,6 +204,7 @@ class AccountPacket {
       balls: balls,
       username: username,
       userId: userId,
+      lanes: lanes,
     );
   }
 
@@ -210,6 +221,7 @@ class AccountPacket {
     ],
     username: $username,
     userId: $userId,
+    lanes: $lanes,
     balls: ${balls.map((b) => '${b.name}(id=${b.id})').join(', ')}
   )''';
 }
