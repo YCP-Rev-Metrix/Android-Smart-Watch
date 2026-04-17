@@ -183,12 +183,38 @@ class _BowlingFrameState extends State<BowlingFrame> {
 	// Helper to determine the correct starting page
 	void _initializeController() {
 		final frame = _sessionController.currentSession!.games[_sessionController.activeGameIndex].frames[widget.frameIndex];
+		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
+
+		// Determine max shot slots based on frame number (same logic as build)
+		int maxShotSlots;
+		if (widget.frameIndex == 9 || widget.frameIndex == 10) {
+			if (widget.frameIndex == 10) {
+				final frame10 = activeGame.frames[9];
+				final wasFrame10Strike = frame10.shots.isNotEmpty && frame10.shots.first.numOfPinsKnocked == 10;
+				final wasFrame10Spare = frame10.shots.length >= 2 && frame10.totalPinsDown >= 10 && !wasFrame10Strike;
+				maxShotSlots = wasFrame10Spare ? 1 : 2;
+			} else {
+				maxShotSlots = 2;
+			}
+		} else if (widget.frameIndex == 11) {
+			maxShotSlots = 1;
+		} else {
+			maxShotSlots = 2;
+		}
+		
+		int itemCount;
+		if (widget.isInputActive) {
+			itemCount = (frame.shots.length + 1).clamp(1, maxShotSlots); 
+		} else {
+			itemCount = frame.shots.length;
+			if (itemCount == 0) itemCount = 1;
+		}
 		
 		final initialPage = widget.isInputActive 
 			? frame.shots.length 
 			: (frame.shots.isNotEmpty ? frame.shots.length - 1 : 0);
 
-		_controller = PageController(initialPage: initialPage.clamp(0, 2)); 
+		_controller = PageController(initialPage: initialPage.clamp(0, itemCount - 1)); 
 	}
 
 	@override
@@ -205,12 +231,34 @@ class _BowlingFrameState extends State<BowlingFrame> {
 		} else if (widget.isInputActive) {
 			// Case 2: Same frame, but a shot was recorded (or pins were cleared)
 			final frame = _sessionController.currentSession!.games[_sessionController.activeGameIndex].frames[newFrameIndex];
+			final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
+			
+			// Determine max shot slots to calculate valid page bounds
+			int maxShotSlots;
+			if (widget.frameIndex == 9 || widget.frameIndex == 10) {
+				if (widget.frameIndex == 10) {
+					final frame10 = activeGame.frames[9];
+					final wasFrame10Strike = frame10.shots.isNotEmpty && frame10.shots.first.numOfPinsKnocked == 10;
+					final wasFrame10Spare = frame10.shots.length >= 2 && frame10.totalPinsDown >= 10 && !wasFrame10Strike;
+					maxShotSlots = wasFrame10Spare ? 1 : 2;
+				} else {
+					maxShotSlots = 2;
+				}
+			} else if (widget.frameIndex == 11) {
+				maxShotSlots = 1;
+			} else {
+				maxShotSlots = 2;
+			}
+			
+			int itemCount = (frame.shots.length + 1).clamp(1, maxShotSlots);
+			
 			final newPage = frame.shots.length; // The index for the next shot is current shots.length
 			final currentPage = _controller.page?.round() ?? 0;
-			// If the new shot count is greater than the current visible page, animate to the new page.
+			// If the new shot count is greater than the current visible page, animate to the new page (clamped to valid bounds)
 			if (newPage > currentPage) {
+				final clampedNewPage = newPage.clamp(0, itemCount - 1);
 				_controller.animateToPage(
-					newPage,
+					clampedNewPage,
 					duration: const Duration(milliseconds: 300),
 					curve: Curves.easeIn,
 				);
@@ -515,8 +563,10 @@ class _BowlingShotState extends State<BowlingShot> {
 	@override
 	void didUpdateWidget(covariant BowlingShot oldWidget) {
 		super.didUpdateWidget(oldWidget);
-		// Re-read the data if the frame/shot context changes
-		if (oldWidget.frameIndex != widget.frameIndex || oldWidget.shotIndex != widget.shotIndex) {
+		// Re-read the data if the frame/shot context changes, or if input active state changed (shot was recorded)
+		if (oldWidget.frameIndex != widget.frameIndex || 
+		    oldWidget.shotIndex != widget.shotIndex ||
+		    oldWidget.isInputActive != widget.isInputActive) {
 			_updateShotDisplay();
 		}
 	}

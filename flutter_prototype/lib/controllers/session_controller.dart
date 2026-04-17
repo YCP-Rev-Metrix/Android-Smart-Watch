@@ -447,6 +447,8 @@ class SessionController extends ChangeNotifier {
     else if (frameNumber == 12) {
       if (shotCount == 1) {
         // GAME END: Frame 12 is the last possible shot
+        // Explicitly set shot index to 1 to keep state consistent
+        _activeShotIndex = 1;
         // Don't advance - keep showing frame 12, shot 1 (LAST SHOT SCENARIO #3)
       }
     }

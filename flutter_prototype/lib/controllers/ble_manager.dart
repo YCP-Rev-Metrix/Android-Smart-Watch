@@ -218,6 +218,9 @@ class BLEManager extends GetxController {
       await _channel.invokeMethod('disconnectCurrentConnection');
       isConnected.value = false;
       connectedDeviceAddress.value = '';
+      // Clear buffered data from previous connection
+      _incomingBuffer.clear();
+      _lastChunkTime = null;
       update();
     } catch (e) {
       print('disconnectCurrentConnection error: $e');
