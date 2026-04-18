@@ -74,10 +74,10 @@ class _ShotInputPageState extends State<ShotInputPage> {
   final List<String> _titles = [
     'Recent Results',
     'Select Ball',
-    'Boards',
     'Record',
     'Shot',
     'Impact',
+    'Boards',
     'Speed',
   ];
 
@@ -527,8 +527,8 @@ class _ShotInputPageState extends State<ShotInputPage> {
    // Determine pin color:
    // - If not editable (knocked down in previous shot): dark grey
    // - If strike/spare selected: all pins appear knocked down (dark grey)
-   // - Shot 1: unselected = light slate grey, selected = orange
-   // - Shot 2: available pins start orange, selected (left standing) = red
+   // - Shot 1: unselected = light slate grey, selected = light blue
+   // - Shot 2: available pins start light blue, selected (left standing) = orange
    Color pinColor;
    
    // If strike/spare/foul is selected, show knocked down appearance
@@ -536,20 +536,20 @@ class _ShotInputPageState extends State<ShotInputPage> {
      pinColor = !isEditable || !isSelected
          ? const Color.fromRGBO(100, 100, 100, 1) // dark grey - knocked down
          : (widget.frameShotIndex == 1 
-             ? const Color.fromRGBO(250, 136, 71, 1) // Shot 1: foul shows orange (standing)
-             : const Color.fromARGB(255, 255, 0, 0)); // Shot 2: foul shows red (standing)
+             ? const Color.fromRGBO(135, 206, 235, 1) // Shot 1: foul shows light blue (standing)
+             : const Color.fromRGBO(250, 136, 71, 1)); // Shot 2: foul shows orange (standing)
    } else if (!isEditable) {
      pinColor = const Color.fromRGBO(100, 100, 100, 1); // dark grey - knocked down previous shot
    } else if (widget.frameShotIndex == 1) {
      // Shot 1
      pinColor = isSelected 
-       ? const Color.fromRGBO(250, 136, 71, 1) // orange - selected as standing
+       ? const Color.fromRGBO(135, 206, 235, 1) // light blue - selected as standing
        : const Color.fromRGBO(119, 136, 153, 1); // light slate grey - will be knocked down
    } else {
-     // Shot 2: inverted colors - knocked down pins are orange, standing pins are red
+     // Shot 2: inverted colors - knocked down pins are light blue, standing pins are orange
      pinColor = isSelected 
-       ? const Color.fromARGB(255, 255, 0, 0) // red - left standing on shot 2
-       : const Color.fromRGBO(250, 136, 71, 1); // orange - knocked down on shot 2
+       ? const Color.fromRGBO(250, 136, 71, 1) // orange - left standing on shot 2
+       : const Color.fromRGBO(135, 206, 235, 1); // light blue - knocked down on shot 2
    }
 
    return GestureDetector(
@@ -584,8 +584,8 @@ class _ShotInputPageState extends State<ShotInputPage> {
     final double w = 64 * scale;
     final double h = 44 * scale;
     final bool isSelected = _selectedOutcome == compact;
-    final Color bg = isSelected ? const Color.fromRGBO(80, 200, 120, 1) : const Color.fromRGBO(208, 220, 232, 1);
-    final Color textColor = isSelected ? Colors.black : Colors.white;
+    final Color bg = const Color.fromRGBO(250, 136, 71, 1);
+    final Color textColor = isSelected ? Colors.white : Colors.white;
 
     return GestureDetector(
       onTap: () => _selectOutcome(compact),
@@ -628,7 +628,7 @@ Widget _buildFoulGutterButton({double scale = 1.0}) {
        width: 64 * scale,
        height: 44 * scale,
        padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 4 * scale),
-       decoration: BoxDecoration(color: const Color.fromRGBO(208, 220, 232, 1), border: Border.all(color: Colors.black, width: 0.6 * scale)),
+       decoration: BoxDecoration(color: const Color.fromRGBO(250, 136, 71, 1), border: Border.all(color: Colors.black, width: 0.6 * scale)),
        alignment: Alignment.center,
        child: Text('-/F', style: TextStyle(color: Colors.white, fontSize: 14 * scale, fontWeight: FontWeight.w700)),
      ),
@@ -907,10 +907,10 @@ Widget _buildStanceSlider({double scale = 1.0}) {
         onPageChanged: _onPageChanged,
         itemCount: _shouldSkipImpactPage ? 6 : 7,
         itemBuilder: (context, index) {
-          // If we are skipping the impact page, shift index 6 to 5
+          // If we are skipping the impact page, shift indices after it
           int effectiveIndex = index;
-          if (_shouldSkipImpactPage && index == 5) {
-            effectiveIndex = 6;
+          if (_shouldSkipImpactPage && index >= 4) {
+            effectiveIndex = index + 1;
           }
 
           if (effectiveIndex == 1) {
@@ -928,7 +928,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color.fromRGBO(135, 206, 235, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -957,7 +957,105 @@ Widget _buildStanceSlider({double scale = 1.0}) {
               ],
             );
           } else if (effectiveIndex == 2) {
-            // Stance page with stance/target/breakpoint and lane
+            // Record page with record button
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 5),
+                  child: Text(
+                    _titles[effectiveIndex],
+                    style: const TextStyle(
+                      color: Color.fromRGBO(135, 206, 235, 1),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildRecordButton(scale: 3.5, round: true),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          } else if (effectiveIndex == 3) {
+            // Shot screen with pins and outcome
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 4),
+                  child: Text(
+                    _titles[effectiveIndex],
+                    style: const TextStyle(
+                      color: Color.fromRGBO(135, 206, 235, 1),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Pin Display - larger scale
+                      _buildPinDisplay(scale: 1.3),
+                      // Outcome buttons - smaller and closer
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildStrikeOrSpareButton(scale: 0.60),
+                          _buildFoulGutterButton(scale: 0.60),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          } else if (effectiveIndex == 4) {
+            // Impact selector page
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 30, bottom: 10),
+                  child: Text(
+                    _titles[effectiveIndex],
+                    style: const TextStyle(
+                      color: Color.fromRGBO(135, 206, 235, 1),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: _buildVerticalListPicker(
+                            items: _boardOptions,
+                            selectedIndex: _selectedBoard,
+                            onSelectionChanged: (i) {
+                              setState(() => _selectedBoard = i);
+                            },
+                            labelFormatter: (i) => _boardOptions[i],
+                            itemHeight: 60,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          } else if (effectiveIndex == 5) {
+            // Boards/Stance page with stance/target/breakpoint and lane
             Widget boardRow(String label, double value, VoidCallback onTap) {
               final displayVal = value % 1 == 0
                   ? '${value.toInt()}'
@@ -985,10 +1083,10 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 5),
                         decoration: BoxDecoration(
-                          color: const Color.fromRGBO(70, 70, 70, 1),
+                          color: const Color.fromRGBO(250, 136, 71, 1),
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                              color: Colors.grey[600]!, width: 1),
+                              color: const Color.fromRGBO(250, 136, 71, 1), width: 1),
                         ),
                         child: Text(
                           displayVal,
@@ -1013,7 +1111,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color.fromRGBO(135, 206, 235, 1),
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1106,7 +1204,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color.fromRGBO(135, 206, 235, 1),
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1140,7 +1238,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color.fromRGBO(135, 206, 235, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1178,7 +1276,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color.fromRGBO(135, 206, 235, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1216,7 +1314,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color.fromRGBO(135, 206, 235, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1242,7 +1340,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color.fromRGBO(135, 206, 235, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1311,7 +1409,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color.fromRGBO(135, 206, 235, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1450,7 +1548,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       child: Text(
                         value.toString(),
                         style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.white.withOpacity(0.45),
+                          color: isSelected ? const Color.fromRGBO(250, 136, 71, 1) : Colors.white,
                           fontSize: isSelected ? 28 : 20,
                           fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
                         ),
@@ -1562,7 +1660,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                       child: Text(
                         value.toString(),
                         style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.white.withOpacity(0.45),
+                          color: isSelected ? const Color.fromRGBO(250, 136, 71, 1) : Colors.white,
                           fontSize: isSelected ? 28 : 20,
                           fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
                         ),
@@ -1669,7 +1767,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                         child: Text(
                           labelFormatter(itemIndex),
                           style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.white.withOpacity(0.45),
+                            color: isSelected ? const Color.fromRGBO(250, 136, 71, 1) : Colors.white,
                             fontSize: isSelected ? 22 : 17,
                             fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
                           ),

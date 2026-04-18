@@ -793,12 +793,12 @@ class _BowlingShotState extends State<BowlingShot> {
 		final isShotSubmitted = frame.shots.length >= shotIndex;
 		
 		if (shotIndex == 1 || (shotIndex == 2 && !isShotSubmitted)) {
-			// Shot 1 colors OR shot 2 before submission: dark grey for knocked down, purple for standing
+			// Shot 1 colors OR shot 2 before submission: dark grey for knocked down, light blue for standing
 			pinColor = isDown 
 				? const Color.fromRGBO(100, 100, 100, 1) // dark grey - knocked down
-				: const Color.fromRGBO(250, 136, 71, 1); // orange - standing
+				: const Color.fromRGBO(135, 206, 235, 1); // light blue - standing
 		} else {
-			// Shot 2 after submission: show perspective colors (purple for available, red for standing)
+			// Shot 2 after submission: show perspective colors (light blue for available, orange for standing)
 			final currentShot = frame.shots.length >= shotIndex ? frame.shots[shotIndex - 1] : null;
 			final isSpare = currentShot != null && (currentShot.pins & 0x3FF) == 0;
 			
@@ -812,18 +812,18 @@ class _BowlingShotState extends State<BowlingShot> {
 					// No previous shot, treat as shot 1
 					pinColor = isDown 
 						? const Color.fromRGBO(100, 100, 100, 1)
-						: const Color.fromRGBO(250, 136, 71, 1);
+						: const Color.fromRGBO(135, 206, 235, 1);
 				} else {
 					final wasAvailable = previousShot.pinsState[index]; // true = was standing after shot 1
 					if (!wasAvailable) {
 						// Pin was knocked down in shot 1: dark grey
 						pinColor = const Color.fromRGBO(100, 100, 100, 1);
 					} else if (isDown) {
-						// Pin was available but got knocked down in shot 2: purple
-						pinColor = const Color.fromRGBO(250, 136, 71, 1);
+						// Pin was available but got knocked down in shot 2: light blue
+						pinColor = const Color.fromRGBO(135, 206, 235, 1);
 					} else {
-						// Pin is still standing after shot 2: red
-						pinColor = const Color.fromARGB(255, 255, 0, 0);
+						// Pin is still standing after shot 2: orange
+						pinColor = const Color.fromRGBO(250, 136, 71, 1);
 					}
 				}
 			}

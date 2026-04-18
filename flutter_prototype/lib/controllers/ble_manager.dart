@@ -155,10 +155,10 @@ class BLEManager extends GetxController {
           // Show a user-friendly notification for connect/disconnect
           try {
             if (state == 2) {
-              await _showLocalNotification('Bluetooth connected', 'Connected to mobile application');
+              // await _showLocalNotification('Bluetooth connected', 'Connected to mobile application');
             } else if (state == 0 || state == 1) {
               // treat 0/1 as disconnected for user messaging
-              await _showLocalNotification('Bluetooth disconnected', 'Disconnected from mobile application');
+              // await _showLocalNotification('Bluetooth disconnected', 'Disconnected from mobile application');
             }
           } catch (e) {
             print('Notification error: $e');
@@ -358,7 +358,7 @@ class BLEManager extends GetxController {
       await disconnectCurrentConnection();
       
       // Show notification
-      await _showLocalNotification('Disconnected', 'Logged out by mobile app');
+      // await _showLocalNotification('Disconnected', 'Logged out by mobile app');
       
       // Navigate back to home page (clears all routes like logout)
       Get.offAll(() => const HomePage());
@@ -409,7 +409,7 @@ class BLEManager extends GetxController {
       final account = AccountPacket.fromBinary(completePacket);
       lastAccountPacket.value = account;
 
-      await _showLocalNotification('User Data Received', 'Username: ${account.username}');
+      // await _showLocalNotification('User Data Received', 'Username: ${account.username}');
 
       // Remove this packet from buffer and check for more
       _incomingBuffer.removeRange(0, totalPacketSize);
@@ -461,7 +461,7 @@ class BLEManager extends GetxController {
         }
 
         if (parsed['cmd'] != 'disconn') {
-          _showLocalNotification('Command received', 'Received ${parsed['cmd']}');
+          // _showLocalNotification('Command received', 'Received ${parsed['cmd']}');
         }
       } else {
         lastReceivedCommand.value = {'value': parsed};
