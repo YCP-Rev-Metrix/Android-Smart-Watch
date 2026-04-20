@@ -796,7 +796,7 @@ class _BowlingShotState extends State<BowlingShot> {
 			// Shot 1 colors OR shot 2 before submission: dark grey for knocked down, light blue for standing
 			pinColor = isDown 
 				? const Color.fromRGBO(100, 100, 100, 1) // dark grey - knocked down
-				: const Color.fromRGBO(135, 206, 235, 1); // light blue - standing
+				: const Color.fromRGBO(51, 83, 156, 1); // light blue - standing
 		} else {
 			// Shot 2 after submission: show perspective colors (light blue for available, orange for standing)
 			final currentShot = frame.shots.length >= shotIndex ? frame.shots[shotIndex - 1] : null;
@@ -820,7 +820,7 @@ class _BowlingShotState extends State<BowlingShot> {
 						pinColor = const Color.fromRGBO(100, 100, 100, 1);
 					} else if (isDown) {
 						// Pin was available but got knocked down in shot 2: light blue
-						pinColor = const Color.fromRGBO(135, 206, 235, 1);
+						pinColor = const Color.fromRGBO(51, 83, 156, 1);
 					} else {
 						// Pin is still standing after shot 2: orange
 						pinColor = const Color.fromRGBO(250, 136, 71, 1);

@@ -536,20 +536,20 @@ class _ShotInputPageState extends State<ShotInputPage> {
      pinColor = !isEditable || !isSelected
          ? const Color.fromRGBO(100, 100, 100, 1) // dark grey - knocked down
          : (widget.frameShotIndex == 1 
-             ? const Color.fromRGBO(135, 206, 235, 1) // Shot 1: foul shows light blue (standing)
+             ? const Color.fromRGBO(51, 83, 156, 1) // Shot 1: foul shows light blue (standing)
              : const Color.fromRGBO(250, 136, 71, 1)); // Shot 2: foul shows orange (standing)
    } else if (!isEditable) {
      pinColor = const Color.fromRGBO(100, 100, 100, 1); // dark grey - knocked down previous shot
    } else if (widget.frameShotIndex == 1) {
      // Shot 1
      pinColor = isSelected 
-       ? const Color.fromRGBO(135, 206, 235, 1) // light blue - selected as standing
+       ? const Color.fromRGBO(51, 83, 156, 1) // light blue - selected as standing
        : const Color.fromRGBO(119, 136, 153, 1); // light slate grey - will be knocked down
    } else {
      // Shot 2: inverted colors - knocked down pins are light blue, standing pins are orange
      pinColor = isSelected 
        ? const Color.fromRGBO(250, 136, 71, 1) // orange - left standing on shot 2
-       : const Color.fromRGBO(135, 206, 235, 1); // light blue - knocked down on shot 2
+       : const Color.fromRGBO(51, 83, 156, 1); // light blue - knocked down on shot 2
    }
 
    return GestureDetector(
@@ -928,7 +928,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Color.fromRGBO(135, 206, 235, 1),
+                      color: Color.fromRGBO(51, 83, 156, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -965,7 +965,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Color.fromRGBO(135, 206, 235, 1),
+                      color: Color.fromRGBO(51, 83, 156, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -991,7 +991,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Color.fromRGBO(135, 206, 235, 1),
+                      color: Color.fromRGBO(51, 83, 156, 1),
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1025,7 +1025,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Color.fromRGBO(135, 206, 235, 1),
+                      color: Color.fromRGBO(51, 83, 156, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1111,7 +1111,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Color.fromRGBO(135, 206, 235, 1),
+                      color: Color.fromRGBO(51, 83, 156, 1),
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1276,7 +1276,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Color.fromRGBO(135, 206, 235, 1),
+                      color: Color.fromRGBO(51, 83, 156, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1340,7 +1340,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Color.fromRGBO(135, 206, 235, 1),
+                      color: Color.fromRGBO(51, 83, 156, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1409,7 +1409,7 @@ Widget _buildStanceSlider({double scale = 1.0}) {
                   child: Text(
                     _titles[effectiveIndex],
                     style: const TextStyle(
-                      color: Color.fromRGBO(135, 206, 235, 1),
+                      color: Color.fromRGBO(51, 83, 156, 1),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
