@@ -19,10 +19,10 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+      backgroundColor: const Color.fromRGBO(18, 26, 36, 1),
       appBar: AppBar(
         title: const Text('Settings', style: TextStyle(fontSize: 14)),
-        backgroundColor: const Color.fromRGBO(67, 67, 67, 1),
+        backgroundColor: const Color.fromRGBO(18, 26, 36, 1),
         toolbarHeight: 40,
         centerTitle: true,
       ),
@@ -44,7 +44,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                       style: TextStyle(
                         fontSize: 11,
                         color: connected
-                            ? const Color.fromRGBO(142, 124, 195, 1)
+                            ? const Color.fromRGBO(250, 136, 71, 1)
                             : Colors.white70,
                         fontWeight: FontWeight.bold,
                       ),
@@ -97,7 +97,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                       padding: EdgeInsets.zero,
                       backgroundColor: isSyncing
                           ? const Color.fromRGBO(100, 100, 100, 1)
-                          : const Color.fromRGBO(142, 124, 195, 1),
+                          : const Color.fromRGBO(250, 136, 71, 1),
                     ),
                     child: Text(
                       isSyncing ? "Syncing..." : "Sync",
@@ -155,7 +155,7 @@ class _DevSettingsPageState extends State<DevSettingsPage> {
                       padding: EdgeInsets.zero,
                       backgroundColor: isEnding
                           ? const Color.fromRGBO(100, 100, 100, 1)
-                          : const Color.fromRGBO(255, 165, 0, 1),
+                          : const Color.fromRGBO(250, 136, 71, 1),
                     ),
                     child: Text(
                       isEnding ? "Ending..." : "End",

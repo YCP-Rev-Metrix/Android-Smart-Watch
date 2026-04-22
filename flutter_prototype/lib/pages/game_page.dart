@@ -247,12 +247,20 @@ class _BowlingGameState extends State<BowlingGame> {
                 width: 280,
                 height: 280,
                 decoration: const BoxDecoration(
-                  color: Color.fromRGBO(67, 67, 67, 1),
+                  color: Color.fromRGBO(18, 26, 36, 1),
                   shape: BoxShape.circle,
                 ),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 20),
+                      child: Image.asset(
+                        'assets/RevMetrix_Logo.png',
+                        height: 70,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Text(
                       'Game $gameNum of $gameCountVal', 
                       style: const TextStyle(
@@ -261,7 +269,7 @@ class _BowlingGameState extends State<BowlingGame> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8),
                     
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,

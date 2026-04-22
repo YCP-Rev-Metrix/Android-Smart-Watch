@@ -411,34 +411,44 @@ class SessionController extends ChangeNotifier {
         // Frame page stays on frame 10, shot 2 (LAST SHOT SCENARIO #1)
       }
     }
-    // Frame 11 (index 10) - only exists if frame 10 was a strike
+    // Frame 11 (index 10) - only exists if frame 10 was a strike or spare
     else if (frameNumber == 11) {
+      final frame10 = currentSession?.games[activeGameIndex].frames[9];
+      final wasFrame10Strike = frame10?.shots.first.numOfPinsKnocked == 10;
+      final wasFrame10Spare = frame10 != null && frame10.shots.length >= 2 && frame10.totalPinsDown >= 10 && !wasFrame10Strike;
+      
       if (shotCount == 1) {
         final firstShot = newFrame.shots.first;
-        if (firstShot.numOfPinsKnocked == 10) {
-          // Strike on shot 1 - frame 11 is done, move to frame 12
-          _activeFrameIndex++;
-          _activeShotIndex = 1;
+        
+        // If frame 10 was a spare, game ends after 1 shot in frame 11
+        if (wasFrame10Spare) {
+          // GAME END: Frame 10 was spare, frame 11 is done after 1 shot
+          _activeShotIndex = 1; // Explicitly keep at shot 1
+        } else if (firstShot.numOfPinsKnocked == 10) {
+          // Strike on shot 1 - move to frame 12 (if frame 10 was also strike)
+          if (wasFrame10Strike) {
+            // Both strikes - move to frame 12
+            _activeFrameIndex++;
+            _activeShotIndex = 1;
+          } else {
+            // Single strike in frame 11 (frame 10 was something else) - game ends
+            _activeShotIndex = 1;
+          }
         } else {
-          // Not a strike, need shot 2
+          // Not a strike on shot 1, need shot 2 (only possible if frame 10 was strike)
           _activeShotIndex = 2;
         }
       } else if (shotCount == 2) {
-        // Two shots taken in frame 11
-        final totalPins = newFrame.totalPinsDown;
-        if (totalPins >= 10) {
-          // Spare achieved, move to frame 12
-          _activeFrameIndex++;
-          _activeShotIndex = 1;
-        }
-        // GAME END: Open frame (less than 10 pins) - don't advance
-        // Frame page stays on frame 11, shot 2 (LAST SHOT SCENARIO #2)
+        // Two shots taken in frame 11 - game ends (only possible if frame 10 was strike)
+        // Don't advance (LAST SHOT SCENARIO #2)
       }
     }
     // Frame 12 (index 11) - only exists if frame 11 was a strike or spare
     else if (frameNumber == 12) {
       if (shotCount == 1) {
         // GAME END: Frame 12 is the last possible shot
+        // Explicitly set shot index to 1 to keep state consistent
+        _activeShotIndex = 1;
         // Don't advance - keep showing frame 12, shot 1 (LAST SHOT SCENARIO #3)
       }
     }

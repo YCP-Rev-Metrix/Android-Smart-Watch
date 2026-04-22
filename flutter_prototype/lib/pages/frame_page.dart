@@ -35,9 +35,9 @@ class _FrameShellState extends State<FrameShell> {
 
 
 	final List<Color> frameColorPalette = const [
-		Color.fromRGBO(67, 67, 67, 1),
-		Color.fromRGBO(67, 67, 67, 1),
-		Color.fromRGBO(67, 67, 67, 1),
+		Color.fromRGBO(18, 26, 36, 1),
+		Color.fromRGBO(18, 26, 36, 1),
+		Color.fromRGBO(18, 26, 36, 1),
 	];
 	
 	int get _currentActiveFrameIndex => _sessionController.activeFrameIndex;
@@ -183,12 +183,38 @@ class _BowlingFrameState extends State<BowlingFrame> {
 	// Helper to determine the correct starting page
 	void _initializeController() {
 		final frame = _sessionController.currentSession!.games[_sessionController.activeGameIndex].frames[widget.frameIndex];
+		final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
+
+		// Determine max shot slots based on frame number (same logic as build)
+		int maxShotSlots;
+		if (widget.frameIndex == 9 || widget.frameIndex == 10) {
+			if (widget.frameIndex == 10) {
+				final frame10 = activeGame.frames[9];
+				final wasFrame10Strike = frame10.shots.isNotEmpty && frame10.shots.first.numOfPinsKnocked == 10;
+				final wasFrame10Spare = frame10.shots.length >= 2 && frame10.totalPinsDown >= 10 && !wasFrame10Strike;
+				maxShotSlots = wasFrame10Spare ? 1 : 2;
+			} else {
+				maxShotSlots = 2;
+			}
+		} else if (widget.frameIndex == 11) {
+			maxShotSlots = 1;
+		} else {
+			maxShotSlots = 2;
+		}
+		
+		int itemCount;
+		if (widget.isInputActive) {
+			itemCount = (frame.shots.length + 1).clamp(1, maxShotSlots); 
+		} else {
+			itemCount = frame.shots.length;
+			if (itemCount == 0) itemCount = 1;
+		}
 		
 		final initialPage = widget.isInputActive 
 			? frame.shots.length 
 			: (frame.shots.isNotEmpty ? frame.shots.length - 1 : 0);
 
-		_controller = PageController(initialPage: initialPage.clamp(0, 2)); 
+		_controller = PageController(initialPage: initialPage.clamp(0, itemCount - 1)); 
 	}
 
 	@override
@@ -205,12 +231,34 @@ class _BowlingFrameState extends State<BowlingFrame> {
 		} else if (widget.isInputActive) {
 			// Case 2: Same frame, but a shot was recorded (or pins were cleared)
 			final frame = _sessionController.currentSession!.games[_sessionController.activeGameIndex].frames[newFrameIndex];
+			final activeGame = _sessionController.currentSession!.games[_sessionController.activeGameIndex];
+			
+			// Determine max shot slots to calculate valid page bounds
+			int maxShotSlots;
+			if (widget.frameIndex == 9 || widget.frameIndex == 10) {
+				if (widget.frameIndex == 10) {
+					final frame10 = activeGame.frames[9];
+					final wasFrame10Strike = frame10.shots.isNotEmpty && frame10.shots.first.numOfPinsKnocked == 10;
+					final wasFrame10Spare = frame10.shots.length >= 2 && frame10.totalPinsDown >= 10 && !wasFrame10Strike;
+					maxShotSlots = wasFrame10Spare ? 1 : 2;
+				} else {
+					maxShotSlots = 2;
+				}
+			} else if (widget.frameIndex == 11) {
+				maxShotSlots = 1;
+			} else {
+				maxShotSlots = 2;
+			}
+			
+			int itemCount = (frame.shots.length + 1).clamp(1, maxShotSlots);
+			
 			final newPage = frame.shots.length; // The index for the next shot is current shots.length
 			final currentPage = _controller.page?.round() ?? 0;
-			// If the new shot count is greater than the current visible page, animate to the new page.
+			// If the new shot count is greater than the current visible page, animate to the new page (clamped to valid bounds)
 			if (newPage > currentPage) {
+				final clampedNewPage = newPage.clamp(0, itemCount - 1);
 				_controller.animateToPage(
-					newPage,
+					clampedNewPage,
 					duration: const Duration(milliseconds: 300),
 					curve: Curves.easeIn,
 				);
@@ -233,7 +281,15 @@ class _BowlingFrameState extends State<BowlingFrame> {
 		int maxShotSlots;
 		if (widget.frameIndex == 9 || widget.frameIndex == 10) {
 			// Frames 10, 11: Strike = 1 shot max, Non-strike = 2 shots max
-			maxShotSlots = 2; // Will be limited by actual game logic
+			// Special case: Frame 11 with frame 10 spare = only 1 shot allowed
+			if (widget.frameIndex == 10) {
+				final frame10 = activeGame.frames[9];
+				final wasFrame10Strike = frame10.shots.isNotEmpty && frame10.shots.first.numOfPinsKnocked == 10;
+				final wasFrame10Spare = frame10.shots.length >= 2 && frame10.totalPinsDown >= 10 && !wasFrame10Strike;
+				maxShotSlots = wasFrame10Spare ? 1 : 2;
+			} else {
+				maxShotSlots = 2;
+			}
 		} else if (widget.frameIndex == 11) {
 			// Frame 12: Always 1 shot max
 			maxShotSlots = 1;
@@ -507,8 +563,10 @@ class _BowlingShotState extends State<BowlingShot> {
 	@override
 	void didUpdateWidget(covariant BowlingShot oldWidget) {
 		super.didUpdateWidget(oldWidget);
-		// Re-read the data if the frame/shot context changes
-		if (oldWidget.frameIndex != widget.frameIndex || oldWidget.shotIndex != widget.shotIndex) {
+		// Re-read the data if the frame/shot context changes, or if input active state changed (shot was recorded)
+		if (oldWidget.frameIndex != widget.frameIndex || 
+		    oldWidget.shotIndex != widget.shotIndex ||
+		    oldWidget.isInputActive != widget.isInputActive) {
 			_updateShotDisplay();
 		}
 	}
@@ -559,8 +617,8 @@ class _BowlingShotState extends State<BowlingShot> {
 			} else {
 				// Use controller-level defaults when this frame has no prior shots
 				pinsDown = List.filled(10, true);
-				// Auto-flip lane every frame: frame 1 = lane 1, frame 2 = lane 2, etc.
-				lane = (widget.frameIndex % 2 == 0) ? 1 : 2;
+				// Use the last selected lane (persisted in defaultLane)
+				lane = _sessionController.defaultLane;
 				board = _sessionController.defaultBoard;
 				speed = _sessionController.defaultSpeed;
 				ball = _sessionController.defaultBall;
@@ -735,12 +793,12 @@ class _BowlingShotState extends State<BowlingShot> {
 		final isShotSubmitted = frame.shots.length >= shotIndex;
 		
 		if (shotIndex == 1 || (shotIndex == 2 && !isShotSubmitted)) {
-			// Shot 1 colors OR shot 2 before submission: dark grey for knocked down, purple for standing
+			// Shot 1 colors OR shot 2 before submission: dark grey for knocked down, light blue for standing
 			pinColor = isDown 
 				? const Color.fromRGBO(100, 100, 100, 1) // dark grey - knocked down
-				: const Color.fromRGBO(142, 124, 195, 1); // purple - standing
+				: const Color.fromRGBO(51, 83, 156, 1); // light blue - standing
 		} else {
-			// Shot 2 after submission: show perspective colors (purple for available, red for standing)
+			// Shot 2 after submission: show perspective colors (light blue for available, orange for standing)
 			final currentShot = frame.shots.length >= shotIndex ? frame.shots[shotIndex - 1] : null;
 			final isSpare = currentShot != null && (currentShot.pins & 0x3FF) == 0;
 			
@@ -754,18 +812,18 @@ class _BowlingShotState extends State<BowlingShot> {
 					// No previous shot, treat as shot 1
 					pinColor = isDown 
 						? const Color.fromRGBO(100, 100, 100, 1)
-						: const Color.fromRGBO(142, 124, 195, 1);
+						: const Color.fromRGBO(135, 206, 235, 1);
 				} else {
 					final wasAvailable = previousShot.pinsState[index]; // true = was standing after shot 1
 					if (!wasAvailable) {
 						// Pin was knocked down in shot 1: dark grey
 						pinColor = const Color.fromRGBO(100, 100, 100, 1);
 					} else if (isDown) {
-						// Pin was available but got knocked down in shot 2: purple
-						pinColor = const Color.fromRGBO(142, 124, 195, 1);
+						// Pin was available but got knocked down in shot 2: light blue
+						pinColor = const Color.fromRGBO(51, 83, 156, 1);
 					} else {
-						// Pin is still standing after shot 2: red
-						pinColor = const Color.fromARGB(255, 255, 0, 0);
+						// Pin is still standing after shot 2: orange
+						pinColor = const Color.fromRGBO(250, 136, 71, 1);
 					}
 				}
 			}
