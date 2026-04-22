@@ -100,6 +100,7 @@ class _ShotInputPageState extends State<ShotInputPage> {
     'Tap',
     'Gutter',
     'Foul',
+    'Spare',
   ];
 
   List<String> get _boardOptions => widget.frameShotIndex == 1
