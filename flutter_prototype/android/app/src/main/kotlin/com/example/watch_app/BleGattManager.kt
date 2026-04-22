@@ -138,13 +138,14 @@ class BleGattManager(private val context: Context, private val channel: MethodCh
                 }
 
                     // Post a local notification for command writes
-                    try {
-                        val title = "Command received"
-                        val body = "From ${device.address}: ${value.joinToString(separator = ",") { it.toString() }}"
-                        showNotification(title, body)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Notification error: ${e.message}")
-                    }
+                    // Disabled: notification not needed when commands are received
+                    // try {
+                    //     val title = "Command received"
+                    //     val body = "From ${device.address}: ${value.joinToString(separator = ",") { it.toString() }}"
+                    //     showNotification(title, body)
+                    // } catch (e: Exception) {
+                    //     Log.w(TAG, "Notification error: ${e.message}")
+                    // }
             }
 
             if (responseNeeded) {
