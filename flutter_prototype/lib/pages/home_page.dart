@@ -68,10 +68,17 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: const Color.fromRGBO(18, 26, 36, 1),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.fromLTRB(12.0, 0, 12.0, 12.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
+            // Logo
+            Image.asset(
+              'assets/RevMetrix_Logo.png',
+              height: 70,
+            ),
+            const SizedBox(height: 10),
+            
             // Waiting to pair text
             const Text(
               'Waiting to pair...',
@@ -83,29 +90,16 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 10),
             
-            // Advertising status text
-            Obx(() {
-              return Text(
-                ble.isAdvertising.value ? 'Advertise successful' : 'Advertising unsuccessful',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: ble.isAdvertising.value ? Colors.green : Colors.red,
-                ),
-              );
-            }),
-            const SizedBox(height: 16),
-            
             // Horizontal divider
             const Divider(
-              thickness: 1,
-              color: Colors.grey,
+              thickness: 2,
+              color: Colors.white,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
             
             // Offline Mode button
             SizedBox(
-              width: 100,
+              width: 120,
               height: 40,
               child: ElevatedButton(
                 onPressed: () {
